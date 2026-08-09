@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Module 1 - Dynamic Model Selection with Circuit Breaker Pattern
+
+Globals:
+  Function:
+    Timeout: 60
+    Runtime: python3.12
+    MemorySize: 512
+
+Resources:
+  # API Gateway
+  ModelSelectionApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: prod
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+
+  # Lambda Router Function
+  RouterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: genai-model-router
+      CodeUri: lambda/
+      Handler: router.lambda_handler
+      Environment:
+        Variables:
+          PRIMARY_MODEL: anthropic.claude-3-5-sonnet-20241022-v2:0
+          FALLBACK_MODEL: amazon.nova-pro-v1:0
+          BUDGET_MODEL: amazon.nova-lite-v1:0
+          CIRCUIT_BREAKER_THRESHOLD: "5"
+          CIRCUIT_BREAKER_TIMEOUT: "30"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+              Resource: "arn:aws:bedrock:*:*:model/*"
+            - Effect: Allow
+              Action:
+                - cloudwatch:PutMetricData
+              Resource: "*"
+      Events:
+        QueryApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ModelSelectionApi
+            Path: /query
+            Method: post
+        HealthApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ModelSelectionApi
+            Path: /health
+            Method: get
+        AdminApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ModelSelectionApi
+            Path: /admin/simulate-failure
+            Method: post
+
+  # CloudWatch Dashboard
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: GenAI-Model-Selection
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Model Invocations by Provider",
+                "metrics": [
+                  ["GenAI/ModelSelection", "Invocations", "Provider", "anthropic"],
+                  ["GenAI/ModelSelection", "Invocations", "Provider", "amazon"],
+                  ["GenAI/ModelSelection", "Invocations", "Provider", "meta"]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Latency by Model",
+                "metrics": [
+                  ["GenAI/ModelSelection", "Latency", "Model", "claude-sonnet"],
+                  ["GenAI/ModelSelection", "Latency", "Model", "nova-pro"],
+                  ["GenAI/ModelSelection", "Latency", "Model", "nova-lite"]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Circuit Breaker State",
+                "metrics": [
+                  ["GenAI/ModelSelection", "CircuitBreakerOpen", "Provider", "anthropic"],
+                  ["GenAI/ModelSelection", "CircuitBreakerOpen", "Provider", "amazon"]
+                ],
+                "period": 60,
+                "stat": "Maximum",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Estimated Cost (USD)",
+                "metrics": [
+                  ["GenAI/ModelSelection", "EstimatedCost", "Provider", "anthropic"],
+                  ["GenAI/ModelSelection", "EstimatedCost", "Provider", "amazon"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ModelSelectionApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  DashboardUrl:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/cloudwatch/home#dashboards:name=GenAI-Model-Selection"
