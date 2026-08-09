@@ -2,167 +2,109 @@
 
 ## 概要
 
-研修で使用するハンズオンデモ環境を EC2 上に構築するための CloudFormation テンプレートとセットアップスクリプトです。
-
-## 構成
-
-```
-infra/
-├── README.md              # このファイル
-├── demo-ec2.yaml          # CloudFormation テンプレート
-└── setup-demo-env.sh      # EC2 内部のセットアップスクリプト
-```
-
-## 運用フロー
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  初回のみ                                                    │
-│  1. CloudFormation でスタック作成                             │
-│  2. EC2 が自動的にセットアップ（UserData）                   │
-│  3. Bedrock モデルアクセスを有効化（コンソール）              │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│  研修前日                                                    │
-│  1. aws ec2 start-instances でインスタンス起動               │
-│  2. SSH で接続して動作確認                                   │
-│  3. 必要に応じて git pull で最新コードを取得                 │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│  研修当日                                                    │
-│  1. SSH で接続                                               │
-│  2. ./run-demo.sh で各モジュールのデモを実行                 │
-│  3. 必要に応じて AWS コンソールも併用                        │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│  研修後（自動）                                              │
-│  - 毎日 23:00 JST にインスタンスが自動停止                   │
-│  - 手動停止: aws ec2 stop-instances                          │
-└─────────────────────────────────────────────────────────────┘
-```
+Session Manager 経由で接続する EC2 デモ環境。SSH キー不要。
+ハンズオン資材は S3 バケットに保管し、EC2 起動時に自動ダウンロード。
 
 ## デプロイ手順
 
-### 1. スタックの作成
+### Step 1: 資材を S3 にアップロード
 
 ```bash
+chmod +x infra/upload-assets.sh
+./infra/upload-assets.sh
+```
+
+### Step 2: CloudFormation スタックの作成
+
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
 aws cloudformation create-stack \
   --stack-name handson-demo-env \
   --template-body file://infra/demo-ec2.yaml \
   --parameters \
-    ParameterKey=KeyPairName,ParameterValue=YOUR_KEY_PAIR \
-    ParameterKey=AllowedSSHCidr,ParameterValue=YOUR_IP/32 \
+    ParameterKey=AssetsBucket,ParameterValue=handson-demo-assets-$ACCOUNT_ID \
+    ParameterKey=AssetsPrefix,ParameterValue=handson-assets \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
 ```
 
-### 2. スタック作成完了を待機
+### Step 3: 完了を待機
 
 ```bash
 aws cloudformation wait stack-create-complete --stack-name handson-demo-env
 ```
 
-### 3. 接続情報の確認
+### Step 4: Session Manager で接続
 
 ```bash
-aws cloudformation describe-stacks --stack-name handson-demo-env \
-  --query "Stacks[0].Outputs" --output table
-```
+# インスタンス ID を取得
+INSTANCE_ID=$(aws cloudformation describe-stacks \
+  --stack-name handson-demo-env \
+  --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" \
+  --output text)
 
-### 4. SSH 接続
+# 接続
+aws ssm start-session --target $INSTANCE_ID
 
-```bash
-ssh -i YOUR_KEY_PAIR.pem ec2-user@<PublicIP>
-```
-
-### 5. セットアップ完了の確認
-
-```bash
-# UserData のログを確認
-cat /var/log/user-data.log
-
-# デモヘルパーの確認
-./run-demo.sh all
-```
-
-## Bedrock モデルアクセスの有効化
-
-EC2 のセットアップ後、AWS コンソールで以下のモデルを有効化してください：
-
-1. AWS コンソール → Amazon Bedrock → Model access
-2. 以下のモデルを有効化：
-   - Amazon Nova Lite
-   - Amazon Nova Pro
-   - Amazon Titan Text Embeddings V2
-   - Anthropic Claude 3.5 Sonnet（オプション）
-   - Anthropic Claude 3 Haiku（オプション）
-
-## デモの実行
-
-```bash
-# インタラクティブメニュー
+# 接続後
+sudo su - ec2-user
 ./run-demo.sh
-
-# 直接指定
-./run-demo.sh M01    # モデルベンチマーク
-./run-demo.sh M04    # プロンプトエンジニアリング
-./run-demo.sh M05    # エージェント
 ```
 
-## コスト
+### Step 5: Bedrock モデルアクセスを有効化
 
-| リソース | 月間コスト（停止運用時） |
-|---------|----------------------|
-| EC2 t3.medium（1日8時間×5日/月） | ~$7 |
+AWS コンソール → Bedrock → Model access で以下を有効化:
+- Amazon Nova Lite / Pro
+- Amazon Titan Text Embeddings V2
+- (任意) Anthropic Claude 3.5 Sonnet / Haiku
+
+## 運用フロー
+
+```
+初回:   upload-assets.sh → CFn create-stack → Bedrock有効化
+前日:   aws ec2 start-instances --instance-ids <ID>
+当日:   aws ssm start-session → ./run-demo.sh M01
+夜間:   23:00 JST に自動停止（Lambda）
+更新時: upload-assets.sh → EC2再起動（UserData再実行はしない。手動でS3から再取得）
+```
+
+## 資材の更新方法
+
+ハンズオン内容を更新した場合:
+
+```bash
+# 1. S3 に最新版をアップロード
+./infra/upload-assets.sh
+
+# 2. EC2 内で再取得
+aws ssm start-session --target <INSTANCE_ID>
+sudo su - ec2-user
+aws s3 cp s3://handson-demo-assets-<ACCOUNT_ID>/handson-assets/handson.tar.gz /tmp/
+rm -rf ~/handson
+mkdir ~/handson
+tar -xzf /tmp/handson.tar.gz -C ~/handson --strip-components=1
+```
+
+## コスト見積もり
+
+| リソース | 月間コスト（研修時のみ起動） |
+|---------|--------------------------|
+| EC2 t3.medium（1日8時間×5日） | ~$7 |
 | EBS 30GB gp3 | ~$2.40 |
-| Lambda (自動停止) | < $0.01 |
-| Bedrock (デモ実行時) | $1-5/研修回 |
+| S3（資材保管） | < $0.10 |
+| Lambda（自動停止） | < $0.01 |
+| Bedrock（デモ実行） | $1-5/研修回 |
 | **合計** | **~$10-15/月** |
-
-※ 常時起動の場合: ~$30/月
-
-## インスタンスの起動/停止
-
-```bash
-# 起動（研修前日）
-aws ec2 start-instances --instance-ids <INSTANCE_ID>
-
-# 停止（研修後 or 手動）
-aws ec2 stop-instances --instance-ids <INSTANCE_ID>
-
-# ステータス確認
-aws ec2 describe-instances --instance-ids <INSTANCE_ID> \
-  --query "Reservations[0].Instances[0].State.Name" --output text
-```
-
-## トラブルシューティング
-
-### EC2 に SSH できない
-- セキュリティグループの CIDR を確認（`AllowedSSHCidr`）
-- インスタンスが `running` 状態か確認
-- パブリック IP が変わっている可能性（停止/起動で変わる）
-
-### Bedrock API エラー
-- モデルアクセスが有効化されているか確認
-- IAM ロールに `AmazonBedrockFullAccess` が付いているか確認
-- リージョンが Bedrock 対応リージョンか確認
-
-### UserData が完了しない
-```bash
-# ログを確認
-sudo cat /var/log/user-data.log
-```
 
 ## クリーンアップ
 
 ```bash
-# 全リソースを削除
+# スタック削除
 aws cloudformation delete-stack --stack-name handson-demo-env
 
-# S3 バケットは別途削除（中身がある場合）
+# S3 バケット削除
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+aws s3 rb s3://handson-demo-assets-$ACCOUNT_ID --force
 aws s3 rb s3://legal-kb-demo-$ACCOUNT_ID --force
 ```

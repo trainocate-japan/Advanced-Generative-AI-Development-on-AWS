@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   ハンズオンデモ環境 EC2 インスタンス
-  研修前日に起動 → 研修後に停止する運用を想定
+  Session Manager 経由で接続。研修前日に起動 → 研修後に自動停止。
+  ハンズオン資材は S3 バケットからダウンロード。
 
 Parameters:
   InstanceType:
@@ -10,22 +11,19 @@ Parameters:
     AllowedValues: [t3.small, t3.medium, t3.large]
     Description: EC2 インスタンスタイプ
 
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: SSH 接続用のキーペア名
-
-  AllowedSSHCidr:
+  AssetsBucket:
     Type: String
-    Default: 0.0.0.0/0
-    Description: SSH アクセスを許可する CIDR (研修会場の IP に制限推奨)
+    Description: ハンズオン資材がアップロードされた S3 バケット名 (upload-assets.sh で作成)
 
-  GitHubRepo:
+  AssetsPrefix:
     Type: String
-    Default: https://github.com/trainocate-japan/Advanced-Generative-AI-Development-on-AWS.git
-    Description: ハンズオンリポジトリの URL
+    Default: handson-assets
+    Description: S3 バケット内のプレフィックス
 
 Resources:
-  # IAM Role (Bedrock, S3, CloudWatch, etc.)
+  # ==========================================================================
+  # IAM Role (Session Manager + Bedrock + S3 + その他 AWS サービス)
+  # ==========================================================================
   DemoInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -38,6 +36,9 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
+        # Session Manager に必要
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        # ハンズオンに必要なサービス
         - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/CloudWatchFullAccessV2
@@ -49,7 +50,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator
         - arn:aws:iam::aws:policy/IAMFullAccess
       Policies:
-        - PolicyName: BedrockAgentAccess
+        - PolicyName: BedrockAgentAndOpenSearch
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -66,29 +67,25 @@ Resources:
       Roles:
         - !Ref DemoInstanceRole
 
-  # Security Group
+  # ==========================================================================
+  # Security Group (SSH不要 - Session Manager 経由のため最小限)
+  # ==========================================================================
   DemoSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Handson Demo EC2 Security Group
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref AllowedSSHCidr
-          Description: SSH access
-        - IpProtocol: tcp
-          FromPort: 8501
-          ToPort: 8501
-          CidrIp: !Ref AllowedSSHCidr
-          Description: Streamlit demo apps
+      GroupDescription: Handson Demo - Session Manager only (no inbound required)
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound (SSM endpoints, Bedrock API, etc.)
 
+  # ==========================================================================
   # EC2 Instance
+  # ==========================================================================
   DemoInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyPairName
       IamInstanceProfile: !Ref DemoInstanceProfile
       SecurityGroups:
         - !Ref DemoSecurityGroup
@@ -110,42 +107,212 @@ Resources:
           #!/bin/bash -xe
           exec > /var/log/user-data.log 2>&1
 
-          echo "=== ハンズオンデモ環境セットアップ開始 ==="
+          echo "=========================================="
+          echo " ハンズオンデモ環境セットアップ開始"
+          echo " $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "=========================================="
 
-          # システム更新
+          # ------------------------------------------
+          # システム更新と基本ツール
+          # ------------------------------------------
+          echo "[1/7] システム更新..."
           yum update -y
-
-          # 基本ツールのインストール
-          yum install -y git python3.12 python3.12-pip nodejs npm jq
+          yum install -y python3.12 python3.12-pip jq unzip tar
 
           # Python のデフォルト設定
           alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
           alternatives --set python3 /usr/bin/python3.12
+          ln -sf /usr/bin/pip3.12 /usr/bin/pip3
 
-          # AWS SAM CLI のインストール
+          # ------------------------------------------
+          # Python ライブラリ
+          # ------------------------------------------
+          echo "[2/7] Python ライブラリをインストール..."
+          pip3.12 install --upgrade pip
+          pip3.12 install \
+            boto3 \
+            streamlit \
+            numpy \
+            pandas
+
+          # ------------------------------------------
+          # AWS SAM CLI
+          # ------------------------------------------
+          echo "[3/7] AWS SAM CLI をインストール..."
           pip3.12 install aws-sam-cli
 
-          # Python ライブラリのインストール
-          pip3.12 install boto3 streamlit
-
-          # AWS CDK のインストール
+          # ------------------------------------------
+          # Node.js & AWS CDK
+          # ------------------------------------------
+          echo "[4/7] Node.js と CDK をインストール..."
+          curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
+          yum install -y nodejs
           npm install -g aws-cdk
 
-          # リポジトリのクローン
-          cd /home/ec2-user
-          git clone ${GitHubRepo} handson-repo
-          chown -R ec2-user:ec2-user handson-repo
+          # ------------------------------------------
+          # S3 からハンズオン資材をダウンロード
+          # ------------------------------------------
+          echo "[5/7] S3 からハンズオン資材をダウンロード..."
+          WORK_DIR=/home/ec2-user/handson
+          mkdir -p $WORK_DIR
+          aws s3 cp s3://${AssetsBucket}/${AssetsPrefix}/handson.tar.gz /tmp/handson.tar.gz
+          tar -xzf /tmp/handson.tar.gz -C $WORK_DIR --strip-components=1
+          rm -f /tmp/handson.tar.gz
+          chown -R ec2-user:ec2-user $WORK_DIR
 
-          # セットアップスクリプトの実行
-          cd handson-repo
-          if [ -f infra/setup-demo-env.sh ]; then
-            chmod +x infra/setup-demo-env.sh
-            sudo -u ec2-user bash infra/setup-demo-env.sh
+          # ------------------------------------------
+          # M03 用 S3 バケットとサンプルドキュメント
+          # ------------------------------------------
+          echo "[6/7] デモ用 S3 リソースを準備..."
+          AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+          KB_BUCKET="legal-kb-demo-$AWS_ACCOUNT"
+
+          if ! aws s3 ls "s3://$KB_BUCKET" 2>/dev/null; then
+            if [ "$AWS_REGION" = "us-east-1" ]; then
+              aws s3 mb "s3://$KB_BUCKET"
+            else
+              aws s3 mb "s3://$KB_BUCKET" --region "$AWS_REGION"
+            fi
           fi
 
-          echo "=== セットアップ完了 ==="
+          if [ -d "$WORK_DIR/M03-data-automation/sample-docs" ]; then
+            aws s3 sync "$WORK_DIR/M03-data-automation/sample-docs/" "s3://$KB_BUCKET/documents/" --quiet
+          fi
 
-  # Auto Stop (EventBridge + Lambda で毎日23時に自動停止)
+          # ------------------------------------------
+          # デモ実行ヘルパースクリプト
+          # ------------------------------------------
+          echo "[7/7] デモヘルパーを作成..."
+          cat > /home/ec2-user/run-demo.sh << 'HELPER'
+          #!/bin/bash
+          HANDSON_DIR="$HOME/handson"
+
+          show_menu() {
+              echo ""
+              echo "=============================================="
+              echo " ハンズオンデモ実行メニュー"
+              echo "=============================================="
+              echo ""
+              echo "  M01 - 基盤モデル選択・ベンチマーク比較"
+              echo "  M02 - データ検証・マルチモーダル処理"
+              echo "  M03 - RAG・ナレッジベース"
+              echo "  M04 - プロンプトエンジニアリング・CoT"
+              echo "  M05 - エージェント（旅行プランニング）"
+              echo "  M06 - Guardrails デモ"
+              echo "  M07 - パフォーマンス・キャッシング"
+              echo "  M08 - モニタリング・ハルシネーション検出"
+              echo "  M09 - テスト・評価フレームワーク"
+              echo "  M10 - エンタープライズ統合"
+              echo ""
+              echo "  all  - 全モジュールの環境確認"
+              echo "  quit - 終了"
+              echo ""
+              read -p "  実行するモジュール: " choice
+              run_module "$choice"
+          }
+
+          run_module() {
+              local module="$1"
+              case "$module" in
+                  M01|m01)
+                      echo "▶ M01: モデルベンチマーク実行中..."
+                      cd "$HANDSON_DIR/M01-model-selection"
+                      python3 benchmark.py
+                      ;;
+                  M02|m02)
+                      echo "▶ M02: データ検証パイプライン..."
+                      cd "$HANDSON_DIR/M02-bedrock-converse-api"
+                      echo "  [1] データ検証:"
+                      python3 data_validation.py
+                      echo ""
+                      echo "  [2] コンテキスト最適化:"
+                      python3 context_optimization.py
+                      ;;
+                  M03|m03)
+                      echo "▶ M03: RAG デモ..."
+                      cd "$HANDSON_DIR/M03-data-automation"
+                      python3 rag_basic.py
+                      ;;
+                  M04|m04)
+                      echo "▶ M04: プロンプトエンジニアリング..."
+                      cd "$HANDSON_DIR/M04-performance"
+                      python3 prompt_personas.py
+                      ;;
+                  M05|m05)
+                      echo "▶ M05: 旅行プランニングエージェント..."
+                      cd "$HANDSON_DIR/M05-prompt-management"
+                      python3 travel_agent.py
+                      ;;
+                  M06|m06|M07|m07|M08|m08|M09|m09|M10|m10)
+                      echo "▶ $module: steps.md を参照してください"
+                      ;;
+                  all)
+                      echo "▶ 環境確認..."
+                      echo ""
+                      echo "  Python: $(python3 --version)"
+                      echo "  boto3: $(python3 -c 'import boto3;print(boto3.__version__)')"
+                      echo "  AWS Region: $(aws configure get region)"
+                      echo "  AWS Account: $(aws sts get-caller-identity --query Account --output text)"
+                      echo ""
+                      for dir in "$HANDSON_DIR"/M*/; do
+                          module=$(basename "$dir")
+                          py_count=$(find "$dir" -maxdepth 1 -name "*.py" | wc -l)
+                          echo "  $module: $py_count scripts"
+                      done
+                      ;;
+                  quit|q)
+                      exit 0
+                      ;;
+                  *)
+                      echo "❌ 無効: $module"
+                      show_menu
+                      ;;
+              esac
+          }
+
+          if [ -n "$1" ]; then
+              run_module "$1"
+          else
+              show_menu
+          fi
+          HELPER
+
+          chmod +x /home/ec2-user/run-demo.sh
+          chown ec2-user:ec2-user /home/ec2-user/run-demo.sh
+
+          # ------------------------------------------
+          # Bedrock モデルアクセス確認
+          # ------------------------------------------
+          echo ""
+          echo "=========================================="
+          echo " Bedrock モデルアクセス確認"
+          echo "=========================================="
+          for model in amazon.nova-lite-v1:0 amazon.nova-pro-v1:0 amazon.titan-embed-text-v2:0; do
+            result=$(aws bedrock get-foundation-model --model-identifier "$model" --query "modelDetails.modelId" --output text 2>/dev/null || echo "UNAVAILABLE")
+            if [ "$result" != "UNAVAILABLE" ]; then
+              echo "  ✅ $model"
+            else
+              echo "  ⚠  $model (コンソールで有効化が必要)"
+            fi
+          done
+
+          echo ""
+          echo "=========================================="
+          echo " セットアップ完了! $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "=========================================="
+          echo ""
+          echo " 接続方法: Session Manager"
+          echo "   aws ssm start-session --target $(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+          echo ""
+          echo " デモ実行:"
+          echo "   sudo su - ec2-user"
+          echo "   ./run-demo.sh"
+          echo ""
+
+  # ==========================================================================
+  # Auto Stop (EventBridge + Lambda: 毎日 23:00 JST に自動停止)
+  # ==========================================================================
   StopInstanceFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -197,8 +364,8 @@ Resources:
   StopScheduleRule:
     Type: AWS::Events::Rule
     Properties:
-      Description: 毎日23時にデモインスタンスを自動停止
-      ScheduleExpression: cron(0 14 * * ? *)  # UTC 14:00 = JST 23:00
+      Description: 毎日 23:00 JST (UTC 14:00) にデモインスタンスを自動停止
+      ScheduleExpression: cron(0 14 * * ? *)
       State: ENABLED
       Targets:
         - Arn: !GetAtt StopInstanceFunction.Arn
@@ -212,32 +379,38 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt StopScheduleRule.Arn
 
+# ==========================================================================
+# AMI Mappings (Amazon Linux 2023)
+# ==========================================================================
 Mappings:
   RegionAMI:
     us-east-1:
-      AMI: ami-0c02fb55956c7d316  # Amazon Linux 2023
+      AMI: ami-0c02fb55956c7d316
     us-west-2:
       AMI: ami-0735c191cf914754d
     ap-northeast-1:
       AMI: ami-0d52744d6551d851e
 
+# ==========================================================================
+# Outputs
+# ==========================================================================
 Outputs:
   InstanceId:
     Value: !Ref DemoInstance
     Description: EC2 Instance ID
 
-  PublicIP:
-    Value: !GetAtt DemoInstance.PublicIp
-    Description: パブリック IP (起動のたびに変わる可能性あり)
+  SessionManagerConnect:
+    Value: !Sub "aws ssm start-session --target ${DemoInstance} --region ${AWS::Region}"
+    Description: Session Manager 接続コマンド
 
-  SSHCommand:
-    Value: !Sub "ssh -i ${KeyPairName}.pem ec2-user@${DemoInstance.PublicIp}"
-    Description: SSH 接続コマンド
+  ConsoleSessionManager:
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${DemoInstance}"
+    Description: Session Manager コンソール URL
 
   StartCommand:
-    Value: !Sub "aws ec2 start-instances --instance-ids ${DemoInstance}"
-    Description: 研修前日にインスタンスを起動するコマンド
+    Value: !Sub "aws ec2 start-instances --instance-ids ${DemoInstance} --region ${AWS::Region}"
+    Description: インスタンス起動コマンド (研修前日に実行)
 
   StopCommand:
-    Value: !Sub "aws ec2 stop-instances --instance-ids ${DemoInstance}"
-    Description: 研修後にインスタンスを停止するコマンド
+    Value: !Sub "aws ec2 stop-instances --instance-ids ${DemoInstance} --region ${AWS::Region}"
+    Description: インスタンス停止コマンド (研修後に実行)
