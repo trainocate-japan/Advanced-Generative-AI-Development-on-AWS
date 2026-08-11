@@ -114,7 +114,61 @@ AgentCore が解決する本番課題：
 
 ## パート 4: フレームワーク比較（10分）
 
-### ステップ 4.1: 比較ポイント
+### 環境セットアップ
+
+```bash
+cd ~/handson/M05-agentcore
+
+# Strands Agents（AWS ネイティブ）
+pip install strands-agents strands-agents-tools boto3
+
+# LangGraph（グラフベース・ワークフロー）
+pip install langgraph langchain-aws langchain-core boto3
+
+# CrewAI（マルチエージェント協調）
+pip install crewai crewai-tools boto3
+```
+
+### ステップ 4.1: Strands Agents の実行
+
+```bash
+python3.12 framework_strands.py
+```
+
+特徴:
+- `@tool` デコレータでツールを定義
+- `Agent(model, tools)` に渡すだけでエージェント完成
+- `agent("メッセージ")` で対話（ツール呼び出しは自動）
+- Amazon Bedrock とネイティブ統合
+- AgentCore Runtime にそのままデプロイ可能
+
+### ステップ 4.2: LangGraph の実行
+
+```bash
+python3.12 framework_langgraph.py
+```
+
+特徴:
+- `StateGraph` でノードとエッジを定義（グラフベース）
+- `TypedDict` でステートを型安全に管理
+- `add_conditional_edges` で条件分岐を実現
+- Human-in-the-Loop をグラフに組み込み可能
+- `stream()` でステップごとの実行を可視化
+
+### ステップ 4.3: CrewAI の実行
+
+```bash
+python3.12 framework_crewai.py
+```
+
+特徴:
+- `Agent` に role / goal / backstory を設定（人格を持つ）
+- `Task` で各エージェントの具体的な仕事を定義
+- `Crew` でチームを編成し、`Process`（順次/階層）を指定
+- エージェント間で結果を受け渡し（委任も可能）
+- `crew.kickoff()` で全タスクを自動実行
+
+### ステップ 4.4: 比較ポイント
 
 | フレームワーク | 特徴 | 最適なユースケース |
 |-------------|------|----------------|
@@ -122,7 +176,7 @@ AgentCore が解決する本番課題：
 | LangGraph | 複雑なステートフロー | 条件分岐が多い対話フロー |
 | CrewAI | マルチエージェント協調 | チーム型のタスク分担 |
 
-### ステップ 4.2: 選定基準
+### ステップ 4.5: 選定基準
 
 - **シンプルなエージェント** → Strands Agents
 - **複雑なワークフロー** → LangGraph
