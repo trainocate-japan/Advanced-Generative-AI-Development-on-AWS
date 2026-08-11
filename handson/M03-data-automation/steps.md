@@ -377,7 +377,7 @@ python3.12 chunking_optimization.py
 
 ---
 
-## デモ手順（講師用）
+## デモ手順
 
 ### デモ 1: ナレッジベース検索（5分）
 1. AWS コンソールで Bedrock ナレッジベースを表示
