@@ -170,8 +170,38 @@ Configure の対話プロンプトでの選択：
 ```bash
 # 2. Deploy（CodeBuild でリモートビルド、数分かかります）
 agentcore deploy
+```
 
-# 3. 呼び出しテスト
+デプロイ完了後、Runtime 実行ロールに Memory アクセス権限を追加：
+```bash
+# 実行ロール名を確認（.bedrock_agentcore.yaml に記載、または以下で確認）
+ROLE_NAME=$(aws iam list-roles --query "Roles[?starts_with(RoleName,'AmazonBedrockAgentCoreSDKRuntime')].RoleName" --output text)
+echo "Runtime Role: $ROLE_NAME"
+
+# Memory アクセス権限を追加
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+aws iam put-role-policy \
+  --role-name "$ROLE_NAME" \
+  --policy-name BedrockAgentCoreMemoryAccess \
+  --policy-document "{
+    \"Version\": \"2012-10-17\",
+    \"Statement\": [{
+      \"Effect\": \"Allow\",
+      \"Action\": [
+        \"bedrock-agentcore:CreateEvent\",
+        \"bedrock-agentcore:ListEvents\",
+        \"bedrock-agentcore:RetrieveMemoryRecords\",
+        \"bedrock-agentcore:GetMemory\"
+      ],
+      \"Resource\": \"arn:aws:bedrock-agentcore:us-east-1:${ACCOUNT_ID}:memory/*\"
+    }]
+  }"
+```
+
+※ starter-toolkit が自動作成する実行ロールには Memory 系の権限が含まれないため、手動で追加が必要です。
+
+```bash
+# 3. 呼び出しテスト（権限反映まで1分ほど待つ）
 agentcore invoke '{"prompt": "東京から沖縄の2泊3日旅行プランを作って"}'
 ```
 
