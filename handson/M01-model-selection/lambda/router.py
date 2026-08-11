@@ -211,15 +211,16 @@ def invoke_model_with_fallback(model_id, query):
     failure_type = get_simulated_failure(provider)
     if failure_type:
         logger.warning(f"Simulated {failure_type} for {provider}, falling back")
+        cb = get_circuit_breaker(provider)
+        # シミュレーション障害ではサーキットブレーカーを即座に OPEN にする
+        cb.failure_count = cb.threshold
+        cb.state = "OPEN"
+        cb.last_failure_time = time.time()
+        publish_metrics(provider, model_id, 0, None, success=False)
         if failure_type == "timeout":
-            publish_metrics(provider, model_id, 0, None, success=False)
-            cb = get_circuit_breaker(provider)
-            cb.record_failure()
             return invoke_fallback(query, f"simulated_timeout_{provider}")
         elif failure_type == "error":
-            publish_metrics(provider, model_id, 0, None, success=False)
-            cb = get_circuit_breaker(provider)
-            cb.record_failure()
+            return invoke_fallback(query, f"simulated_error_{provider}")
             return invoke_fallback(query, f"simulated_error_{provider}")
 
     # サーキットブレーカーのチェック
