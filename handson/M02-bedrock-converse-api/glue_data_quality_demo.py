@@ -57,7 +57,7 @@ def get_stack_outputs():
         print(f"\n  先に CloudFormation スタックをデプロイしてください:")
         print(f"  aws cloudformation create-stack \\")
         print(f"    --stack-name glue-data-quality-demo \\")
-        print(f"    --template-body file://../../infra/glue-data-quality-demo.yaml \\")
+        print(f"    --template-body file://glue-data-quality-demo.yaml \\")
         print(f"    --capabilities CAPABILITY_NAMED_IAM \\")
         print(f"    --region {REGION}")
         sys.exit(1)

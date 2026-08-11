@@ -107,7 +107,7 @@ python3.12 context_optimization.py
 
 ---
 
-## パート 4: 統合パフォーマンス測定（5分）
+## パート 4: 統合パフォーマンス測定（10分）
 
 ### ステップ 4.1: エンドツーエンドパイプラインの実行
 
@@ -120,6 +120,76 @@ python3.12 pipeline_demo.py
 - 処理ステージのレイテンシー
 - トークン使用量の最適化効果
 - 総コストの比較（最適化前 vs 最適化後）
+
+### ステップ 4.2: サーバーレスパイプラインのデプロイ
+
+`data-processing-demo.yaml` をデプロイして、SQS → Lambda → DynamoDB の本番構成を構築します：
+
+```bash
+aws cloudformation create-stack \
+  --stack-name data-processing-demo \
+  --template-body file://data-processing-demo.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+スタック作成完了を待ちます（2〜3分）：
+
+```bash
+aws cloudformation wait stack-create-complete --stack-name data-processing-demo
+```
+
+### ステップ 4.3: テストメッセージの送信
+
+SQS キューにテストメッセージを送信し、Lambda が処理することを確認します：
+
+```bash
+# キュー URL を取得
+QUEUE_URL=$(aws cloudformation describe-stacks \
+  --stack-name data-processing-demo \
+  --query "Stacks[0].Outputs[?OutputKey=='QueueUrl'].OutputValue" \
+  --output text)
+
+# テストメッセージ送信
+aws sqs send-message \
+  --queue-url $QUEUE_URL \
+  --message-body '{"id":"test-001","content":"田中太郎です。電話番号は090-1234-5678です。検査結果を教えてください。","category":"medical_inquiry","language":"ja"}'
+```
+
+### ステップ 4.4: 処理結果の確認
+
+DynamoDB テーブルから処理結果を確認します：
+
+```bash
+aws dynamodb scan \
+  --table-name data-processing-results \
+  --region us-east-1
+```
+
+確認ポイント：
+- `pii_count`: PII が検出された件数
+- `masked_content`: PII がマスキングされたテキスト
+- `analysis`: Bedrock による分析結果
+
+### ステップ 4.5: CloudWatch ダッシュボードの確認
+
+以下の URL でパイプラインのメトリクスを確認できます：
+
+```bash
+echo "https://us-east-1.console.aws.amazon.com/cloudwatch/home#dashboards:name=DataProcessingPipeline"
+```
+
+確認するメトリクス：
+- Lambda 処理レイテンシー（P50、P95）
+- SQS キュー深度
+- Lambda 実行回数とエラー数
+- DynamoDB 書き込みキャパシティ
+
+### ステップ 4.6: クリーンアップ
+
+```bash
+aws cloudformation delete-stack --stack-name data-processing-demo
+```
 
 ---
 
@@ -161,7 +231,7 @@ CloudFormation スタックをデプロイして、Glue Data Catalog と S3 バ�
 ```bash
 aws cloudformation create-stack \
   --stack-name glue-data-quality-demo \
-  --template-body file://../../infra/glue-data-quality-demo.yaml \
+  --template-body file://glue-data-quality-demo.yaml \
   --capabilities CAPABILITY_NAMED_IAM \
   --region us-east-1
 ```
