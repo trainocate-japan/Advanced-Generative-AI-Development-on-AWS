@@ -5,7 +5,7 @@
 ### ステップ 1.1: 評価ディメンションの定義
 
 ```bash
-cd handson/M09-agents
+cd ~/handson/M09-agents
 python3 evaluation_framework.py
 ```
 

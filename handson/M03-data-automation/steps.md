@@ -5,7 +5,7 @@
 ### ステップ 1.1: サンプルドキュメントの準備
 
 ```bash
-cd handson/M03-data-automation
+cd ~/handson/M03-data-automation
 
 # サンプル法律文書を S3 にアップロード
 aws s3 mb s3://legal-kb-demo-$(aws sts get-caller-identity --query Account --output text)

@@ -5,7 +5,7 @@
 ### ステップ 1.1: プロジェクトの準備
 
 ```bash
-cd handson/M01-model-selection
+cd ~/handson/M01-model-selection
 pip install boto3 streamlit
 ```
 

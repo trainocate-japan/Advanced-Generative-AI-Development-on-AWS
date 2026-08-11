@@ -5,7 +5,7 @@
 ### ステップ 1.1: プロジェクトの準備
 
 ```bash
-cd handson/M02-bedrock-converse-api
+cd ~/handson/M02-bedrock-converse-api
 pip install boto3
 ```
 

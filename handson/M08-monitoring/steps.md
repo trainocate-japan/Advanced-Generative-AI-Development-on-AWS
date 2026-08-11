@@ -5,7 +5,7 @@
 ### ステップ 1.1: Bedrock モデル呼び出しログの設定
 
 ```bash
-cd handson/M08-monitoring
+cd ~/handson/M08-monitoring
 python3 setup_monitoring.py
 ```
 

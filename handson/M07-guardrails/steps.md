@@ -5,7 +5,7 @@
 ### ステップ 1.1: Bedrock プロンプトキャッシングの実装
 
 ```bash
-cd handson/M07-guardrails
+cd ~/handson/M07-guardrails
 python3 prompt_caching_demo.py
 ```
 

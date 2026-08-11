@@ -5,7 +5,7 @@
 ### ステップ 1.1: Guardrails の作成
 
 ```bash
-cd handson/M06-prompt-caching
+cd ~/handson/M06-prompt-caching
 python3 setup_guardrails.py
 ```
 

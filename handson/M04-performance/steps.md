@@ -5,7 +5,7 @@
 ### ステップ 1.1: 部署別ペルソナの実装
 
 ```bash
-cd handson/M04-performance
+cd ~/handson/M04-performance
 python3 prompt_personas.py
 ```
 
