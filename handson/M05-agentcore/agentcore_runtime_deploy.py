@@ -161,7 +161,7 @@ boto3
 
 AGENT_NAME = "handson-travel-agent"
 AGENT_FILE = "runtime_agent.py"
-REQUIREMENTS_FILE = "runtime_requirements.txt"
+REQUIREMENTS_FILE = "requirements.txt"
 
 
 def setup_files():
