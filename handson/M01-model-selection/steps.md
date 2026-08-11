@@ -61,17 +61,19 @@ sam deploy --stack-name m01 --resolve-s3 --capabilities CAPABILITY_IAM --no-conf
 
 ### ステップ 2.4: テスト
 
-```bash
-# 簡単な質問 → Nova Lite に自動ルーティング
-curl -X POST <API_URL>/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "AWSのリージョンとは何ですか？", "complexity": "simple"}'
+100件のクエリ（simple=40, medium=30, complex=30）を一括送信して動的ルーティングの動作を確認します：
 
-# 複雑な分析 → Claude Sonnet に自動ルーティング
-curl -X POST <API_URL>/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "金融規制コンプライアンスの観点から、このドキュメントのリスク評価を行ってください", "complexity": "complex"}'
+```bash
+python3.12 load_test.py <API_URL>
 ```
+
+`<API_URL>` は `sam deploy` 完了時に表示された API Gateway のエンドポイント URL です。
+
+出力される結果：
+- 各クエリのルーティング先モデルとレイテンシー
+- 複雑度別の成功率・平均レイテンシー・主なルーティング先
+- モデル別の呼び出し回数と平均レイテンシー
+- フォールバック発生回数
 
 ---
 
