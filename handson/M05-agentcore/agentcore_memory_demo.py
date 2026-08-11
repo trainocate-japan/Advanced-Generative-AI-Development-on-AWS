@@ -60,25 +60,35 @@ def create_memory():
     print(f"      • SessionSummarizer: 会話の要約を抽出")
     print(f"      • UserPreferenceExtractor: ユーザー嗜好を抽出")
 
-    response = control.create_memory(
-        name=MEMORY_NAME,
-        description="旅行プランニングエージェント用メモリ",
-        eventExpiryDuration=30,  # 30日 - デモ用
-        memoryStrategies=[
-            {
-                "summaryMemoryStrategy": {
-                    "name": "SessionSummarizer",
-                    "namespaceTemplates": ["/summaries/{actorId}/{sessionId}/"],
-                }
-            },
-            {
-                "userPreferenceMemoryStrategy": {
-                    "name": "UserPreferenceExtractor",
-                    "namespaceTemplates": ["/users/{actorId}/preferences/"],
-                }
-            },
-        ],
-    )
+    try:
+        response = control.create_memory(
+            name=MEMORY_NAME,
+            description="旅行プランニングエージェント用メモリ",
+            eventExpiryDuration=30,  # 30日 - デモ用
+            memoryStrategies=[
+                {
+                    "summaryMemoryStrategy": {
+                        "name": "SessionSummarizer",
+                        "namespaceTemplates": ["/summaries/{actorId}/{sessionId}/"],
+                    }
+                },
+                {
+                    "userPreferenceMemoryStrategy": {
+                        "name": "UserPreferenceExtractor",
+                        "namespaceTemplates": ["/users/{actorId}/preferences/"],
+                    }
+                },
+            ],
+        )
+    except Exception as e:
+        if "already exists" in str(e):
+            print(f"    → Memory は既に存在します。既存のものを使用します。")
+            existing = find_existing_memory()
+            if existing:
+                return existing
+            # find が失敗した場合は名前で get を試す
+            raise
+        raise
 
     memory_id = response["memory"]["id"]
     print(f"\n    ✓ Memory 作成開始")
@@ -103,10 +113,20 @@ def create_memory():
 
 def find_existing_memory():
     """既存 Memory を検索"""
-    resp = control.list_memories()
-    for mem in resp.get("memories", []):
-        if mem.get("name") == MEMORY_NAME:
-            return mem
+    try:
+        resp = control.list_memories()
+        # レスポンスのキーが memories または items の場合に対応
+        mem_list = resp.get("memories", resp.get("items", []))
+        for mem in mem_list:
+            if mem.get("name") == MEMORY_NAME:
+                # get_memory で詳細を取得
+                memory_id = mem.get("id") or mem.get("memoryId")
+                if memory_id:
+                    detail = control.get_memory(memoryId=memory_id)
+                    return detail.get("memory", mem)
+                return mem
+    except Exception as e:
+        print(f"    (list_memories エラー: {e})")
     return None
 
 
