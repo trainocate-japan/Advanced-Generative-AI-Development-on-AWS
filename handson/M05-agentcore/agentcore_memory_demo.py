@@ -54,6 +54,7 @@ def create_memory():
     response = control.create_memory(
         name=MEMORY_NAME,
         description="旅行プランニングエージェント用メモリ",
+        eventExpiryDuration=86400,  # 1日（秒）- デモ用に短めに設定
         memoryStrategies=[
             {
                 "summaryMemoryStrategy": {
