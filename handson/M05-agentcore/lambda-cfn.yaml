@@ -22,6 +22,30 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
 
   # ==========================================================================
+  # IAM Role for AgentCore Gateway (サービスロール)
+  # ==========================================================================
+  GatewayServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: agentcore-gateway-service-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: GatewayInvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt TravelToolsFunction.Arn
+
+  # ==========================================================================
   # Lambda Function
   # ==========================================================================
   TravelToolsFunction:
@@ -114,6 +138,12 @@ Outputs:
   FunctionName:
     Value: !Ref TravelToolsFunction
     Description: Lambda 関数名
+
+  GatewayServiceRoleArn:
+    Value: !GetAtt GatewayServiceRole.Arn
+    Description: Gateway サービスロール ARN（Gateway 作成時に使用）
+    Export:
+      Name: agentcore-gateway-service-role-arn
 
   DeployCommand:
     Value: !Sub |

@@ -79,6 +79,33 @@ def find_existing_gateway(name):
     return None
 
 
+def get_gateway_role_arn():
+    """CFn スタックから Gateway サービスロール ARN を取得"""
+    cfn = boto3.client("cloudformation", region_name=REGION)
+    try:
+        resp = cfn.describe_stacks(StackName="agentcore-travel-tools")
+        outputs = resp["Stacks"][0].get("Outputs", [])
+        for out in outputs:
+            if out["OutputKey"] == "GatewayServiceRoleArn":
+                return out["OutputValue"]
+    except Exception:
+        pass
+
+    # フォールバック: IAM から直接取得
+    iam = boto3.client("iam")
+    try:
+        role = iam.get_role(RoleName="agentcore-gateway-service-role")
+        return role["Role"]["Arn"]
+    except Exception:
+        pass
+
+    raise RuntimeError(
+        "Gateway サービスロールが見つかりません。先に Lambda スタックをデプロイしてください:\n"
+        "  aws cloudformation deploy --template-file lambda-cfn.yaml "
+        "--stack-name agentcore-travel-tools --capabilities CAPABILITY_NAMED_IAM"
+    )
+
+
 # ======================================================================
 # 1. Gateway の作成
 # ======================================================================
@@ -98,10 +125,14 @@ def create_gateway():
         print(f"      Status: {detail.get('status')}")
         return detail
 
+    # Gateway サービスロール ARN を CFn スタックから取得
+    role_arn = get_gateway_role_arn()
+
     response = control.create_gateway(
         name=GATEWAY_NAME,
         protocolType="MCP",
         authorizerType="NONE",
+        roleArn=role_arn,
         description="ハンズオン旅行エージェント用 Gateway",
     )
 
@@ -110,6 +141,7 @@ def create_gateway():
     print(f"      ID:   {gateway_id}")
     print(f"      ARN:  {response['gatewayArn']}")
     print(f"      Auth: NONE (デモ用)")
+    print(f"      Role: {role_arn}")
 
     # ACTIVE まで待機
     print(f"\n    ACTIVE になるまで待機...")
