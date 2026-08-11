@@ -122,6 +122,8 @@ Resources:
         - arn:aws:iam::aws:policy/AWSLambda_FullAccess
         - arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator
         - arn:aws:iam::aws:policy/IAMFullAccess
+        - arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess
+        - arn:aws:iam::aws:policy/AWSGlueConsoleFullAccess
       Policies:
         - PolicyName: BedrockAgentAndOpenSearch
           PolicyDocument:
