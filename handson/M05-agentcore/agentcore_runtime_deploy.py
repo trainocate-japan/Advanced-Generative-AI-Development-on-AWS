@@ -58,7 +58,7 @@ GATEWAY_URL = os.environ.get("AGENTCORE_GATEWAY_URL", "")
 MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID", "")
 
 model = BedrockModel(
-    model_id="us.amazon.nova-pro-v1:0",
+    model_id="us.anthropic.claude-sonnet-4-20250514-v1:0",
     region_name=REGION,
 )
 
@@ -201,7 +201,7 @@ def setup_files():
     print(f"    ✓ {REQUIREMENTS_FILE} を生成")
 
     print(f"\n    エージェント構成:")
-    print(f"      モデル: us.amazon.nova-pro-v1:0")
+    print(f"      モデル: Claude Sonnet 4")
     print(f"      Gateway: {'統合済み' if gateway_url else 'なし（ローカルツール）'}")
     print(f"      Memory:  {'統合済み' if memory_id else 'なし'}")
     print(f"      フレームワーク: Strands Agents + MCPClient")
