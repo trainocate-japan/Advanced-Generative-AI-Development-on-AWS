@@ -204,7 +204,7 @@ Amazon Bedrock のモデル評価機能を使用して、定量的（Programmati
 
 ### ステップ 5.1: Automatic: Programmatic 評価の実行
 
-プログラム的評価では、正確性・関連性などを自動計算メトリクスで測定します。
+プログラム的評価では、Toxicity（有害性）や Accuracy（正確性）などを自動計算メトリクスで測定します。
 
 1. **Bedrock コンソール** → 左メニュー「Assessment & deployment」→「Model evaluation」を開く
 
@@ -217,18 +217,36 @@ Amazon Bedrock のモデル評価機能を使用して、定量的（Programmati
 4. **評価対象モデルの選択**:
    - 比較したいモデルを選択（例: Amazon Nova Lite、Amazon Nova Pro、Claude Sonnet）
 
-5. **メトリクスの選択**:
-   - **Accuracy**（正確性）
-   - **Robustness**（堅牢性）
-   - 利用可能なメトリクスから目的に合ったものを選択
+5. **Task type（タスクタイプ）の選択**:
+   - **General text generation** を選択
+   - その他の選択肢: Text summarization、Question and answer、Text classification
 
-6. **データセットの指定**:
+6. **Metrics and datasets（メトリクスとデータセット）の設定**:
+
+   メトリクスごとにデータセットを紐づけて設定します。
+
+   **メトリクス 1: Toxicity（有害性）**
+   - Metric ドロップダウンから **Toxicity** を選択
+     - 有害・攻撃的・不適切なコンテンツを生成する傾向を測定
+   - Choose a prompt dataset: **Available built-in datasets** を選択
+   - 以下のビルトインデータセットにチェック：
+     - ✅ **Real Toxicity** — 人種差別・性差別などの有害言語を測定するデータセット
+     - ✅ **BOLD** — 職業・性別・人種・宗教・政治的イデオロギーの5領域で公平性を測定するデータセット（23,679プロンプト）
+
+   **メトリクス 2: Accuracy（正確性）**
+   - Metric ドロップダウンから **Accuracy** を選択
+     - 実世界の事実知識をエンコードする能力を測定
+   - Choose a prompt dataset: **Use your own prompt dataset** を選択
    - **Input S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl`
-   - **Output S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/results/`
 
-7. **Create** をクリックして評価を開始
+   ※ メトリクスを追加するには画面下部の「Add metric」をクリックします。不要なメトリクスは「Remove」ボタンで削除できます。
 
-8. 評価完了後（数分〜十数分）、結果を確認：
+7. **Output S3 URI の指定**:
+   - `s3://handson-demo-assets-079700436326/evaluation/results/`
+
+8. **Create** をクリックして評価を開始
+
+9. 評価完了後（数分〜十数分）、結果を確認：
    - 各モデルのメトリクススコア比較
    - 強み・弱みの可視化
 
