@@ -55,6 +55,7 @@
 ```
 handson/
 ├── README.md                       # このファイル
+├── run-demo.sh                     # デモ実行ヘルパー
 ├── M01-model-selection/            # 基盤モデルの選択と設定
 │   ├── scenario.md                 # シナリオ説明
 │   ├── steps.md                    # ハンズオン手順
@@ -67,33 +68,50 @@ handson/
 │   ├── data_validation.py          # データ検証・PII検出
 │   ├── multimodal_processing.py    # マルチモーダル処理
 │   └── context_optimization.py     # コンテキスト最適化
-├── M03-data-automation/            # ベクトルDB と RAG
+├── M03-rag-knowledgebase/          # ベクトルDB と RAG
 │   ├── scenario.md
 │   ├── steps.md
 │   ├── setup_knowledgebase.py      # ナレッジベースセットアップ
 │   ├── rag_basic.py                # RAG基本実装
+│   ├── rag_retrieve.py             # RAG検索
+│   ├── chunking_optimization.py    # チャンキング最適化
+│   ├── rag_evaluation.py           # RAG評価
+│   ├── knowledge_assistant.py      # 会話型ナレッジアシスタント
 │   └── sample-docs/                # サンプル法律文書
-├── M04-performance/                # プロンプトエンジニアリング
+├── M03-opensearch-vectorsearch/    # OpenSearch ベクトル検索（補足）
 │   ├── scenario.md
 │   ├── steps.md
-│   └── prompt_personas.py          # ペルソナ・CoT・フロー
-├── M05-prompt-management/          # AgentCore
+│   ├── setup_opensearch.py         # OpenSearch セットアップ
+│   ├── vector_search.py            # ベクトル検索
+│   ├── hybrid_search.py            # ハイブリッド検索
+│   └── custom_scoring.py           # カスタムスコアリング
+├── M04-prompt-engineering/         # プロンプトエンジニアリング
+│   ├── scenario.md
+│   ├── steps.md
+│   ├── prompt_personas.py          # ペルソナ設計
+│   ├── chain_of_thought.py         # 思考連鎖推論
+│   └── prompt_flow_demo.py         # プロンプトフロー
+├── M05-agentcore/                  # AgentCore エージェント
 │   ├── scenario.md
 │   ├── steps.md
 │   └── travel_agent.py             # 旅行プランニングエージェント
-├── M06-prompt-caching/             # AI安全性・Guardrails
+├── M06-safety-guardrails/          # AI安全性・Guardrails
 │   ├── scenario.md
 │   └── steps.md
-├── M07-guardrails/                 # パフォーマンス・コスト管理
+├── M07-cost-optimization/          # パフォーマンス・コスト管理
 │   ├── scenario.md
 │   └── steps.md
 ├── M08-monitoring/                 # モニタリング・オブザーバビリティ
 │   ├── scenario.md
 │   └── steps.md
-├── M09-agents/                     # テスト・検証・継続改善
+├── M09-testing-validation/         # テスト・検証・継続改善
+│   ├── scenario.md
+│   ├── steps.md
+│   └── evaluation-dataset.jsonl    # 評価データセット
+├── M10-enterprise-integration/     # エンタープライズ統合
 │   ├── scenario.md
 │   └── steps.md
-└── M10-rag-knowledgebase/          # エンタープライズ統合
+└── M11-serverless-webapp/          # サーバーレス Web アプリ
     ├── scenario.md
     └── steps.md
 ```

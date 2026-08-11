@@ -70,4 +70,4 @@
 - Amazon Bedrock で以下のモデルアクセス有効化済み：
   - Amazon Titan Embeddings V2
 - OpenSearch Serverless のコレクション作成権限
-- M03-data-automation のサンプルドキュメント（`../M03-data-automation/sample-docs/`）を使用
+- M03-rag-knowledgebase のサンプルドキュメント（`../M03-rag-knowledgebase/sample-docs/`）を使用

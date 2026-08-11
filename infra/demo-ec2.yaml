@@ -240,8 +240,8 @@ Resources:
               aws s3 mb "s3://$KB_BUCKET" --region "$AWS_REGION"
             fi
           fi
-          if [ -d "$WORK_DIR/M03-data-automation/sample-docs" ]; then
-            aws s3 sync "$WORK_DIR/M03-data-automation/sample-docs/" "s3://$KB_BUCKET/documents/" --quiet
+          if [ -d "$WORK_DIR/M03-rag-knowledgebase/sample-docs" ]; then
+            aws s3 sync "$WORK_DIR/M03-rag-knowledgebase/sample-docs/" "s3://$KB_BUCKET/documents/" --quiet
           fi
 
           # デモ実行ヘルパー (S3 から取得済みのものをホームにコピー)

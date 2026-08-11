@@ -27,8 +27,8 @@ INDEX_NAME = "legal-docs"
 EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSIONS = 1024
 
-# サンプルドキュメントのパス（M03-data-automation のものを再利用）
-SAMPLE_DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "M03-data-automation", "sample-docs")
+# サンプルドキュメントのパス（M03-rag-knowledgebase のものを再利用）
+SAMPLE_DOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "M03-rag-knowledgebase", "sample-docs")
 
 
 def load_config():

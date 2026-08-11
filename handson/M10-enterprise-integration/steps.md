@@ -5,7 +5,7 @@
 ### ステップ 1.1: REST API による AI サービス公開
 
 ```bash
-cd ~/handson/M10-rag-knowledgebase
+cd ~/handson/M10-enterprise-integration
 python3.12 enterprise_api_demo.py
 ```
 

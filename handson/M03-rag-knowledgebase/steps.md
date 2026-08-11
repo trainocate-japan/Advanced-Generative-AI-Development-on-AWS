@@ -5,7 +5,7 @@
 ### ステップ 1.1: サンプルドキュメントの準備
 
 ```bash
-cd ~/handson/M03-data-automation
+cd ~/handson/M03-rag-knowledgebase
 
 # サンプル法律文書用の S3 バケットを作成
 aws s3 mb s3://legal-kb-demo-$(aws sts get-caller-identity --query Account --output text)

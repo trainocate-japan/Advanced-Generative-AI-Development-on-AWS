@@ -5,7 +5,7 @@
 ### ステップ 1.1: Strands Agents によるエージェント構築
 
 ```bash
-cd ~/handson/M05-prompt-management
+cd ~/handson/M05-agentcore
 pip install strands-agents strands-agents-tools boto3
 python3.12 travel_agent.py
 ```

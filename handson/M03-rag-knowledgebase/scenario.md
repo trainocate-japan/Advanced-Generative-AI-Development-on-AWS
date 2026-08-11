@@ -72,7 +72,7 @@
 ## ファイル構成
 
 ```
-M03-data-automation/
+M03-rag-knowledgebase/
 ├── scenario.md                 # このファイル（シナリオ説明）
 ├── steps.md                    # ハンズオン手順
 ├── setup_knowledgebase.py      # ナレッジベースセットアップ（S3 Vectors）
