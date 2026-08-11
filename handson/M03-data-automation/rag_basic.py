@@ -8,13 +8,24 @@
 import boto3
 import json
 import time
+import os
 
 # AWS クライアント
 bedrock_agent_runtime = boto3.client('bedrock-agent-runtime', region_name='us-east-1')
 bedrock_runtime = boto3.client('bedrock-runtime', region_name='us-east-1')
 
-# ナレッジベース ID（セットアップ後に設定）
-KNOWLEDGE_BASE_ID = "YOUR_KB_ID"  # setup_knowledgebase.py で作成後に設定
+# 設定ファイルから読み込み（存在する場合）
+def load_config():
+    config_path = os.path.join(os.path.dirname(__file__), "kb_config.json")
+    if os.path.exists(config_path):
+        with open(config_path) as f:
+            return json.load(f)
+    return {}
+
+_config = load_config()
+
+# ナレッジベース ID（setup_knowledgebase.py 実行後に kb_config.json から自動取得）
+KNOWLEDGE_BASE_ID = _config.get("knowledge_base_id", "YOUR_KB_ID")
 MODEL_ARN = "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0"
 
 # テスト質問
@@ -204,20 +215,19 @@ def demo_simulated():
     print(f"  {'セマンティック':<15} {'意味単位':<15} {'最高':<10} {'法律・技術文書'}")
 
     print(f"""
-  ベクトルストアの選択肢:
+  ベクトルストア: Amazon S3 Vectors
   ┌──────────────────────────────────────────────────────────────┐
-  │ Amazon Bedrock KB (デフォルト)                                │
-  │   - 最も簡単なセットアップ                                    │
-  │   - OpenSearch Serverless を自動プロビジョニング              │
+  │ Amazon S3 Vectors（このハンズオンで使用）                     │
+  │   - OpenSearch Serverless 比で最大 90% のコスト削減          │
+  │   - 20億ベクトルまでスケール可能                              │
+  │   - Bedrock KB とネイティブ統合                               │
+  │   - サーバーレス（インフラ管理不要）                          │
+  │   - コールドクエリでもサブ秒レイテンシー                      │
   │                                                              │
-  │ Amazon OpenSearch Service                                     │
-  │   - k-NN アルゴリズムの細かい設定が可能                      │
-  │   - ハイブリッド検索のカスタマイズ                            │
-  │                                                              │
-  │ Amazon S3 Vectors (新サービス)                                │
-  │   - 最大90%のコスト削減                                      │
-  │   - 20億ベクトルまでスケール                                  │
-  │   - Bedrock KB とシームレスに統合                             │
+  │ 他の選択肢（参考）:                                          │
+  │   - OpenSearch Serverless: 高QPS、ハイブリッド検索に最適     │
+  │   - Aurora PostgreSQL: pgvector + SQL統合                    │
+  │   - Neptune Analytics: グラフ + ベクトル統合                  │
   └──────────────────────────────────────────────────────────────┘
     """)
 
