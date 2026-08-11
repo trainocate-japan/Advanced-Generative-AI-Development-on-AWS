@@ -255,6 +255,13 @@ def create_data_source(kb_id):
         return ds_id
 
     except Exception as e:
+        if "already exists" in str(e).lower() or "conflict" in str(e).lower():
+            # 既存のデータソースを取得
+            ds_list = bedrock_agent.list_data_sources(knowledgeBaseId=kb_id)
+            for ds in ds_list.get('dataSourceSummaries', []):
+                if ds['name'] == "legal-documents":
+                    print(f"  ℹ データソース既存: {ds['dataSourceId']}")
+                    return ds['dataSourceId']
         print(f"  ❌ エラー: {e}")
         return None
 
