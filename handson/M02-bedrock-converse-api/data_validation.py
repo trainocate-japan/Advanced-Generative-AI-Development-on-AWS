@@ -94,15 +94,23 @@ def validate_format(record):
     return {"score": score, "issues": issues}
 
 
-def detect_pii(text):
+def detect_pii(text, language='ja'):
     """Amazon Comprehend で PII を検出する"""
     if not text:
         return {"entities": [], "score": 100}
     
+    # Comprehend の DetectPiiEntities は en, es のみ対応
+    # 日本語などの非対応言語は正規表現ベースのフォールバックを使用
+    supported_languages = ['en', 'es']
+    
+    if language not in supported_languages:
+        print(f"  ℹ Comprehend PII検出は '{language}' 非対応のため、正規表現ベースの検出を使用します")
+        return detect_pii_fallback(text)
+    
     try:
         response = comprehend.detect_pii_entities(
             Text=text,
-            LanguageCode='ja'
+            LanguageCode=language
         )
         
         entities = []
@@ -213,7 +221,7 @@ def run_validation_pipeline():
         # 3. PII 検出
         content = record.get("content", "")
         if content:
-            pii_result = detect_pii(content)
+            pii_result = detect_pii(content, language=record.get("language", "ja"))
             print(f"\n  [3] PII 検出:")
             if pii_result["entities"]:
                 print(f"      ⚠ {len(pii_result['entities'])} 件の PII を検出")
