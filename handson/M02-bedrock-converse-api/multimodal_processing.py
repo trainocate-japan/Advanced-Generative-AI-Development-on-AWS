@@ -19,16 +19,43 @@ MODEL_ID = "amazon.nova-lite-v1:0"
 
 
 def create_sample_image_base64():
-    """デモ用のサンプル画像データ（1x1ピクセルのPNG）を生成"""
-    # 最小のPNG画像（デモ用 - 実際にはスキャン画像を使用）
+    """デモ用のサンプル画像データ（100x100ピクセルのPNG グラデーション）を生成"""
+    # Bedrock モデルが受け付ける十分なサイズ・内容の画像を生成
     # 本番では S3 から取得した実際の画像を使用します
-    minimal_png = (
-        b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
-        b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
-        b'\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00'
-        b'\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
-    )
-    return base64.b64encode(minimal_png).decode('utf-8')
+    import struct
+    import zlib
+
+    # 100x100 ピクセルのカラフルなグラデーション PNG を生成
+    width, height = 100, 100
+
+    def make_png(w, h):
+        """有効な PNG を生成する（グラデーション画像）"""
+        # IHDR
+        ihdr_data = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)  # 8bit RGB
+        ihdr_crc = zlib.crc32(b'IHDR' + ihdr_data) & 0xffffffff
+        ihdr = struct.pack('>I', 13) + b'IHDR' + ihdr_data + struct.pack('>I', ihdr_crc)
+
+        # IDAT - グラデーションピクセルデータ（モデルが認識しやすい）
+        raw_data = b''
+        for y in range(h):
+            raw_data += b'\x00'  # filter byte (None)
+            for x in range(w):
+                r = int(255 * x / w)
+                g = int(255 * y / h)
+                b_val = int(255 * (1 - x / w))
+                raw_data += bytes([r, g, b_val])
+        compressed = zlib.compress(raw_data)
+        idat_crc = zlib.crc32(b'IDAT' + compressed) & 0xffffffff
+        idat = struct.pack('>I', len(compressed)) + b'IDAT' + compressed + struct.pack('>I', idat_crc)
+
+        # IEND
+        iend_crc = zlib.crc32(b'IEND') & 0xffffffff
+        iend = struct.pack('>I', 0) + b'IEND' + struct.pack('>I', iend_crc)
+
+        return b'\x89PNG\r\n\x1a\n' + ihdr + idat + iend
+
+    png_bytes = make_png(width, height)
+    return base64.b64encode(png_bytes).decode('utf-8')
 
 
 def validate_image(image_data_base64, max_size_mb=5):
