@@ -24,7 +24,7 @@ python3.12 setup_opensearch.py
 4. ベクトル検索コレクションの作成
 5. コレクションが ACTIVE になるまで待機
 
-**ポイント（試験対応）:**
+**ポイント:**
 - OpenSearch Serverless は**コレクション**単位でリソースを管理（従来のドメインとは異なる）
 - ベクトル検索には `type: VECTORSEARCH` のコレクションが必要
 - 3 つのポリシー（暗号化・ネットワーク・データアクセス）が必須
@@ -67,7 +67,7 @@ python3.12 vector_search.py --setup
    - Titan Embeddings V2 でテキストをベクトル化
    - OpenSearch にドキュメント + ベクトルをインデックス
 
-**ポイント（試験対応）:**
+**ポイント:**
 - HNSW（Hierarchical Navigable Small World）: 高速な近似 k-NN。メモリ使用量は多いが検索速度に優れる
 - IVF（Inverted File Index）: メモリ効率が良いが精度は HNSW に劣る
 - `ef_construction` を大きくすると精度↑、インデックス構築時間↑
@@ -76,13 +76,13 @@ python3.12 vector_search.py --setup
 ### ステップ 2.2: k-NN ベクトル検索の実行
 
 ```bash
-python3.12 vector_search.py --search "クラウドサービスの障害対応手順"
+python3.12 vector_search.py --search "契約の解除条件と損害賠償"
 ```
 
 以下のクエリで動作を確認します：
-- 「クラウドサービスの障害対応手順」→ インシデント対応ドキュメントがヒット
-- 「マイクロサービスのベストプラクティス」→ アーキテクチャガイドがヒット
-- 「新入社員のオンボーディング」→ 人事関連ドキュメントがヒット
+- 「契約の解除条件と損害賠償」→ 契約書テンプレートの関連条項がヒット
+- 「従業員を不当に解雇されないための保護制度」→ 労働法の解雇規定がヒット
+- 「個人情報の取り扱いに関する基本原則」→ プライバシー規制ドキュメントがヒット
 
 **観察ポイント:**
 - コサイン類似度スコア（0〜1）の分布
@@ -109,21 +109,21 @@ python3.12 vector_search.py --compare-algorithms
 ### ステップ 3.1: ハイブリッド検索の実行
 
 ```bash
-python3.12 hybrid_search.py --query "Lambda 関数のタイムアウトエラー解決方法"
+python3.12 hybrid_search.py --query "個人情報 第三者提供 同意"
 ```
 
 3 つの検索タイプを同時に実行し、結果を比較します：
 
 | 検索タイプ | 方式 | 強み |
 |-----------|------|------|
-| キーワード検索（BM25） | テキストの完全/部分一致 | 特定エラーコード・固有名詞 |
+| キーワード検索（BM25） | テキストの完全/部分一致 | 特定の条文番号・法令名称 |
 | セマンティック検索（k-NN） | ベクトル類似度 | 概念的・探索的クエリ |
 | ハイブリッド検索 | BM25 + k-NN のスコア統合 | 両方の強みを組み合わせ |
 
 ### ステップ 3.2: スコア正規化と重み付け
 
 ```bash
-python3.12 hybrid_search.py --query "セキュリティのベストプラクティス" --semantic-weight 0.7
+python3.12 hybrid_search.py --query "秘密保持義務の期間と範囲" --semantic-weight 0.7
 ```
 
 ハイブリッド検索のスコア統合方法：
@@ -147,11 +147,11 @@ python3.12 hybrid_search.py --demo
 
 | クエリ | 最適な検索タイプ | 理由 |
 |--------|----------------|------|
-| `ERROR-5023` | キーワード検索 | 正確なコード一致が必要 |
-| 「パフォーマンス改善のヒント」 | セマンティック検索 | 概念的・探索的 |
-| 「Lambda timeout 解決方法」 | ハイブリッド検索 | 固有名詞 + 概念の混合 |
+| `第7条` | キーワード検索 | 正確な条文番号の一致が必要 |
+| 「従業員を不当に解雇されないための保護制度」 | セマンティック検索 | 概念的・探索的 |
+| 「個人情報 第三者提供 同意」 | ハイブリッド検索 | 固有名詞 + 概念の混合 |
 
-**ポイント（試験対応）:**
+**ポイント:**
 - ハイブリッド検索は「既存のキーワード検索がうまく動いている部分を壊さず、セマンティック検索で弱点を補う」パターン
 - Amazon OpenSearch Service と Bedrock Knowledge Bases の両方でハイブリッド検索をサポート
 
@@ -162,7 +162,7 @@ python3.12 hybrid_search.py --demo
 ### ステップ 4.1: script_score によるカスタムスコアリング
 
 ```bash
-python3.12 custom_scoring.py --query "障害対応" --boost-recent
+python3.12 custom_scoring.py --query "契約解除" --boost-recent
 ```
 
 カスタムスコアリングのユースケース：
@@ -196,15 +196,15 @@ score = (knn_score * 0.6) + (bm25_score * 0.2) + (recency_score * 0.1) + (popula
 ### ステップ 4.3: フィルタリングとの組み合わせ
 
 ```bash
-python3.12 custom_scoring.py --query "API設計" --filter-category "architecture"
+python3.12 custom_scoring.py --query "知的財産権" --filter-category "architecture"
 ```
 
 メタデータフィルタリング + カスタムスコアリングの組み合わせ：
-- カテゴリフィルタ: 検索対象を絞り込み
+- カテゴリフィルタ: 検索対象を絞り込み（contract / employment_law / privacy）
 - 日付範囲フィルタ: 直近 N 日のドキュメントのみ
 - カスタムスコアで最終ランキングを最適化
 
-**ポイント（試験対応）:**
+**ポイント:**
 - OpenSearch Service はカスタムスコアリング関数に最大限の制御を提供
 - OpenSearch Serverless ではカスタムスコアリングの一部制約あり → フル機能が必要な場合は OpenSearch Service（マネージドドメイン）を使用
 - Bedrock Knowledge Bases では Retrieve API の結果を後処理してリランキングする方法もある
@@ -238,16 +238,16 @@ python3.12 custom_scoring.py --query "API設計" --filter-category "architecture
 ## デモ手順
 
 ### デモ 1: k-NN ベクトル検索（5分）
-1. `python3.12 vector_search.py --search "システムの可用性を高める方法"` を実行
+1. `python3.12 vector_search.py --search "会社が倒産した場合の契約の扱い"` を実行
 2. コサイン類似度スコアと検索結果を確認
 3. 完全一致しない表現でも意味的に関連するドキュメントが返ることを説明
 4. `--k 3` と `--k 10` で返却件数を変えて精度の変化を見る
 
 ### デモ 2: ハイブリッド検索の威力（5分）
-1. キーワード検索のみ: `--mode keyword` → 特定用語には強いが概念検索に弱い
-2. セマンティック検索のみ: `--mode semantic` → 概念は拾うが正確なコード番号に弱い
+1. キーワード検索のみ: `--mode keyword` → 条文番号には強いが概念検索に弱い
+2. セマンティック検索のみ: `--mode semantic` → 概念は拾うが正確な条文番号に弱い
 3. ハイブリッド検索: `--mode hybrid` → 両方をカバー
-4. 「ERROR-5023」と「パフォーマンス改善」で違いを実演
+4. 「第7条」と「従業員の保護制度」で違いを実演
 
 ### デモ 3: カスタムスコアリング（5分）
 1. 基本スコアと時間減衰付きスコアの違いを表示
