@@ -39,12 +39,12 @@ control = boto3.client("bedrock-agentcore-control", region_name=REGION)
 # ヘルパー
 # ======================================================================
 
-def wait_for_gateway(gateway_id, target_status="ACTIVE", timeout=180):
+def wait_for_gateway(gateway_id, target_status="READY", timeout=180):
     """Gateway が指定ステータスになるまで待機"""
     for _ in range(timeout // 10):
         resp = control.get_gateway(gatewayIdentifier=gateway_id)
         status = resp.get("status")
-        if status == target_status:
+        if status in (target_status, "ACTIVE", "READY"):
             return resp
         if status == "FAILED":
             raise Exception(f"Gateway FAILED: {resp.get('failureReason')}")
@@ -54,14 +54,14 @@ def wait_for_gateway(gateway_id, target_status="ACTIVE", timeout=180):
 
 
 def wait_for_target(gateway_id, target_id, timeout=120):
-    """Gateway Target が ACTIVE になるまで待機"""
+    """Gateway Target が ACTIVE/READY になるまで待機"""
     for _ in range(timeout // 10):
         resp = control.get_gateway_target(
             gatewayIdentifier=gateway_id,
             targetId=target_id,
         )
         status = resp.get("status")
-        if status == "ACTIVE":
+        if status in ("ACTIVE", "READY"):
             return resp
         if status == "FAILED":
             raise Exception(f"Target FAILED: {resp.get('failureReason')}")
