@@ -34,6 +34,7 @@ Resources:
           BUDGET_MODEL: amazon.nova-lite-v1:0
           CIRCUIT_BREAKER_THRESHOLD: "5"
           CIRCUIT_BREAKER_TIMEOUT: "30"
+          FAILURE_SIM_PREFIX: /genai/model-selection/simulate-failure/
       Policies:
         - Statement:
             - Effect: Allow
@@ -48,6 +49,14 @@ Resources:
               Action:
                 - cloudwatch:PutMetricData
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParametersByPath
+                - ssm:PutParameter
+                - ssm:DeleteParameter
+              Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/model-selection/simulate-failure/*"
       Events:
         QueryApi:
           Type: Api

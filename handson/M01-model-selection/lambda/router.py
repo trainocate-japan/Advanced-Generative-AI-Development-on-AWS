@@ -18,6 +18,7 @@ logger.setLevel(logging.INFO)
 # AWS クライアント
 bedrock = boto3.client('bedrock-runtime')
 cloudwatch = boto3.client('cloudwatch')
+ssm = boto3.client('ssm')
 
 # 環境変数
 PRIMARY_MODEL = os.environ.get('PRIMARY_MODEL', 'us.anthropic.claude-sonnet-4-5-20250929-v1:0')
@@ -29,8 +30,65 @@ CB_TIMEOUT = int(os.environ.get('CIRCUIT_BREAKER_TIMEOUT', '30'))
 # サーキットブレーカー状態（Lambda のインメモリ - 本番では DynamoDB 推奨）
 circuit_breakers = {}
 
-# 障害シミュレーション状態
-simulated_failures = {}
+# 障害シミュレーション用 SSM パラメータのプレフィックス
+FAILURE_SIM_PREFIX = os.environ.get('FAILURE_SIM_PREFIX', '/genai/model-selection/simulate-failure/')
+
+
+def get_simulated_failure(provider):
+    """SSM Parameter Store から障害シミュレーション設定を取得する"""
+    try:
+        response = ssm.get_parameter(
+            Name=f"{FAILURE_SIM_PREFIX}{provider}"
+        )
+        return response['Parameter']['Value']
+    except ssm.exceptions.ParameterNotFound:
+        return None
+    except Exception as e:
+        logger.warning(f"Failed to read failure simulation from SSM: {str(e)}")
+        return None
+
+
+def set_simulated_failure(provider, failure_type):
+    """SSM Parameter Store に障害シミュレーション設定を書き込む"""
+    try:
+        ssm.put_parameter(
+            Name=f"{FAILURE_SIM_PREFIX}{provider}",
+            Value=failure_type,
+            Type='String',
+            Overwrite=True
+        )
+    except Exception as e:
+        logger.error(f"Failed to write failure simulation to SSM: {str(e)}")
+        raise
+
+
+def remove_simulated_failure(provider):
+    """SSM Parameter Store から障害シミュレーション設定を削除する"""
+    try:
+        ssm.delete_parameter(
+            Name=f"{FAILURE_SIM_PREFIX}{provider}"
+        )
+    except ssm.exceptions.ParameterNotFound:
+        pass  # 存在しなければ何もしない
+    except Exception as e:
+        logger.error(f"Failed to delete failure simulation from SSM: {str(e)}")
+        raise
+
+
+def get_all_simulated_failures():
+    """SSM Parameter Store から全ての障害シミュレーション設定を取得する"""
+    try:
+        response = ssm.get_parameters_by_path(
+            Path=FAILURE_SIM_PREFIX,
+            Recursive=False
+        )
+        return {
+            p['Name'].replace(FAILURE_SIM_PREFIX, ''): p['Value']
+            for p in response.get('Parameters', [])
+        }
+    except Exception as e:
+        logger.warning(f"Failed to list failure simulations from SSM: {str(e)}")
+        return {}
 
 
 class CircuitBreaker:
@@ -133,9 +191,9 @@ def invoke_model_with_fallback(model_id, query):
     """
     provider = model_id.split('.')[0]  # anthropic, amazon, meta
 
-    # 障害シミュレーションのチェック
-    if provider in simulated_failures:
-        failure_type = simulated_failures[provider]
+    # 障害シミュレーションのチェック（SSM Parameter Store から取得）
+    failure_type = get_simulated_failure(provider)
+    if failure_type:
         if failure_type == "timeout":
             time.sleep(10)
             raise TimeoutError(f"Simulated timeout for {provider}")
@@ -339,17 +397,17 @@ def lambda_handler(event, context):
         failure_type = body.get('failure_type', 'none')
 
         if failure_type == 'none':
-            simulated_failures.pop(provider, None)
+            remove_simulated_failure(provider)
             msg = f"Failure simulation removed for {provider}"
         else:
-            simulated_failures[provider] = failure_type
+            set_simulated_failure(provider, failure_type)
             msg = f"Simulating {failure_type} for {provider}"
 
         logger.info(msg)
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'message': msg, 'simulated_failures': simulated_failures})
+            'body': json.dumps({'message': msg, 'simulated_failures': get_all_simulated_failures()})
         }
 
     # メインのクエリ処理
