@@ -46,6 +46,15 @@ def create_memory():
         print(f"      Status: {existing.get('status')}")
         return existing
 
+    # 既存チェック
+    existing = find_existing_memory()
+    if existing:
+        memory_id = existing["id"]
+        print(f"    → 既存の Memory を使用: {memory_id}")
+        print(f"      Name: {existing.get('name')}")
+        print(f"      Status: {existing.get('status')}")
+        return existing
+
     print(f"    Memory 名: {MEMORY_NAME}")
     print(f"    戦略:")
     print(f"      • SessionSummarizer: 会話の要約を抽出")
