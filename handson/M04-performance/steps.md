@@ -6,7 +6,7 @@
 
 ```bash
 cd handson/M04-performance
-python prompt_personas.py
+python3 prompt_personas.py
 ```
 
 3つの部署向けペルソナを実装し、同一質問に対する応答の違いを確認します：
@@ -31,7 +31,7 @@ python prompt_personas.py
 ### ステップ 2.1: 基本的な CoT の実装
 
 ```bash
-python chain_of_thought.py
+python3 chain_of_thought.py
 ```
 
 以下のパターンを実装します：
@@ -75,7 +75,7 @@ python chain_of_thought.py
 ### ステップ 3.1: プロンプトフローの設計
 
 ```bash
-python prompt_flow_demo.py
+python3 prompt_flow_demo.py
 ```
 
 マルチステップワークフローを構築：
@@ -147,7 +147,7 @@ Bedrock プロンプト管理の機能を確認：
 ```bash
 # ローカル実行のためクリーンアップは最小限
 # Bedrock プロンプト管理のリソースを削除する場合:
-python cleanup.py
+python3 cleanup.py
 ```
 
 ---

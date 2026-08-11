@@ -6,7 +6,7 @@
 
 ```bash
 cd handson/M07-guardrails
-python prompt_caching_demo.py
+python3 prompt_caching_demo.py
 ```
 
 プロンプトキャッシングの仕組み：
@@ -47,7 +47,7 @@ messages = [{
 ### ステップ 2.1: 概念と実装
 
 ```bash
-python semantic_cache_demo.py
+python3 semantic_cache_demo.py
 ```
 
 従来キャッシュ vs セマンティックキャッシュ：
@@ -80,7 +80,7 @@ python semantic_cache_demo.py
 ### ステップ 3.1: キュー深度に応じた動的バッチサイジング
 
 ```bash
-python batch_optimization.py
+python3 batch_optimization.py
 ```
 
 スケーリングルール：

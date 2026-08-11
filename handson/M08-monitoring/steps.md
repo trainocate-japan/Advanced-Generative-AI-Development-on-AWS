@@ -6,7 +6,7 @@
 
 ```bash
 cd handson/M08-monitoring
-python setup_monitoring.py
+python3 setup_monitoring.py
 ```
 
 設定内容：
@@ -17,7 +17,7 @@ python setup_monitoring.py
 ### ステップ 1.2: カスタムメトリクスの発行
 
 ```bash
-python monitoring_demo.py
+python3 monitoring_demo.py
 ```
 
 追跡するメトリクス：
@@ -41,7 +41,7 @@ CloudWatch 異常検知の設定：
 ### ステップ 2.1: ハルシネーション検出
 
 ```bash
-python hallucination_detection.py
+python3 hallucination_detection.py
 ```
 
 検出手法：
@@ -72,7 +72,7 @@ CloudWatch ダッシュボードに表示するメトリクス：
 ### ステップ 3.1: ビジネスメトリクスの定義
 
 ```bash
-python business_metrics.py
+python3 business_metrics.py
 ```
 
 3つの柱：
@@ -146,7 +146,7 @@ Costs:
 ## クリーンアップ
 
 ```bash
-python cleanup_monitoring.py
+python3 cleanup_monitoring.py
 ```
 
 ---

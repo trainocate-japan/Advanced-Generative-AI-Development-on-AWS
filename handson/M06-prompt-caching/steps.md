@@ -6,7 +6,7 @@
 
 ```bash
 cd handson/M06-prompt-caching
-python setup_guardrails.py
+python3 setup_guardrails.py
 ```
 
 Guardrails に設定する保護機能：
@@ -19,7 +19,7 @@ Guardrails に設定する保護機能：
 ### ステップ 1.2: Guardrails の動作確認
 
 ```bash
-python guardrails_demo.py
+python3 guardrails_demo.py
 ```
 
 テストケース：
@@ -42,7 +42,7 @@ python guardrails_demo.py
 ### ステップ 2.2: 多層防御の実装
 
 ```bash
-python security_layers.py
+python3 security_layers.py
 ```
 
 防御レイヤー：
@@ -108,7 +108,7 @@ CloudTrail で記録される情報：
 ## クリーンアップ
 
 ```bash
-python cleanup_guardrails.py
+python3 cleanup_guardrails.py
 ```
 
 ---

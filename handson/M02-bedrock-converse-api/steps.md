@@ -14,7 +14,7 @@ pip install boto3
 `data_validation.py` を実行して、データ検証パイプラインの動作を確認します：
 
 ```bash
-python data_validation.py
+python3 data_validation.py
 ```
 
 このスクリプトは以下の検証を実行します：
@@ -46,7 +46,7 @@ python data_validation.py
 `multimodal_processing.py` を実行します：
 
 ```bash
-python multimodal_processing.py
+python3 multimodal_processing.py
 ```
 
 このスクリプトは以下を実行します：
@@ -79,7 +79,7 @@ python multimodal_processing.py
 `context_optimization.py` を実行します：
 
 ```bash
-python context_optimization.py
+python3 context_optimization.py
 ```
 
 以下の最適化技術を実践します：
@@ -112,7 +112,7 @@ python context_optimization.py
 ### ステップ 4.1: エンドツーエンドパイプラインの実行
 
 ```bash
-python pipeline_demo.py
+python3 pipeline_demo.py
 ```
 
 パイプライン全体を通して以下を測定します：
