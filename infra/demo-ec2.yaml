@@ -146,6 +146,14 @@ Resources:
                   - ssm:AddTagsToResource
                   - ssm:RemoveTagsFromResource
                 Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/*"
+        - PolicyName: AppConfigAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - appconfig:*
+                Resource: '*'
 
   DemoInstanceProfile:
     Type: AWS::IAM::InstanceProfile
