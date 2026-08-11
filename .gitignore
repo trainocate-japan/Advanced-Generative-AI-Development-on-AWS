@@ -85,3 +85,6 @@ coverage/
 .nyc_output/
 
 text/
+
+# Demo files (not tracked)
+demo/
