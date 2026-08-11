@@ -29,7 +29,7 @@ Resources:
       Handler: router.lambda_handler
       Environment:
         Variables:
-          PRIMARY_MODEL: us.anthropic.claude-sonnet-4-20250514-v1:0
+          PRIMARY_MODEL: us.anthropic.claude-sonnet-4-5-20250929-v1:0
           FALLBACK_MODEL: amazon.nova-pro-v1:0
           BUDGET_MODEL: amazon.nova-lite-v1:0
           CIRCUIT_BREAKER_THRESHOLD: "5"

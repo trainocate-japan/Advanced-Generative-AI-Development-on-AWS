@@ -13,8 +13,8 @@ client = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 # 評価対象モデル
 MODELS = {
-    "Claude Sonnet 4": {
-        "model_id": "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "Claude Sonnet 4.5": {
+        "model_id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         "input_cost_per_1k": 0.003,
         "output_cost_per_1k": 0.015,
         "category": "premium"
@@ -211,7 +211,7 @@ def run_benchmark():
     
     print("\n" + "=" * 80)
     print("  推奨アーキテクチャ:")
-    print("  • プライマリ (複雑な分析): Claude Sonnet 4")
+    print("  • プライマリ (複雑な分析): Claude Sonnet 4.5")
     print("  • セカンダリ (一般タスク): Amazon Nova Pro")
     print("  • バジェット (大量処理): Amazon Nova Lite")
     print("  • フォールバック: Claude Haiku 4.5")

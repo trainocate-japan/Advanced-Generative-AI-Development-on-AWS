@@ -20,7 +20,7 @@ bedrock = boto3.client('bedrock-runtime')
 cloudwatch = boto3.client('cloudwatch')
 
 # 環境変数
-PRIMARY_MODEL = os.environ.get('PRIMARY_MODEL', 'us.anthropic.claude-sonnet-4-20250514-v1:0')
+PRIMARY_MODEL = os.environ.get('PRIMARY_MODEL', 'us.anthropic.claude-sonnet-4-5-20250929-v1:0')
 FALLBACK_MODEL = os.environ.get('FALLBACK_MODEL', 'amazon.nova-pro-v1:0')
 BUDGET_MODEL = os.environ.get('BUDGET_MODEL', 'amazon.nova-lite-v1:0')
 CB_THRESHOLD = int(os.environ.get('CIRCUIT_BREAKER_THRESHOLD', '5'))

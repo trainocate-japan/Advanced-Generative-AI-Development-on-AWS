@@ -49,6 +49,6 @@
 - AWS CLI 設定済み
 - SAM CLI インストール済み
 - Amazon Bedrock で以下のモデルアクセスが有効化済み：
-  - Anthropic Claude Sonnet 4 / Haiku
+  - Anthropic Claude Sonnet 4.5 / Haiku
   - Amazon Nova Lite / Pro
   - Meta Llama 3
