@@ -68,18 +68,9 @@ def create_kb_role():
                 "Sid": "S3VectorsAccess",
                 "Effect": "Allow",
                 "Action": [
-                    "s3vectors:CreateIndex",
-                    "s3vectors:PutVectors",
-                    "s3vectors:GetVectors",
-                    "s3vectors:QueryVectors",
-                    "s3vectors:DeleteVectors",
-                    "s3vectors:GetIndex",
-                    "s3vectors:ListIndexes"
+                    "s3vectors:*"
                 ],
-                "Resource": [
-                    f"arn:aws:s3vectors:{REGION}:{ACCOUNT_ID}:bucket/{VECTOR_BUCKET_NAME}",
-                    f"arn:aws:s3vectors:{REGION}:{ACCOUNT_ID}:bucket/{VECTOR_BUCKET_NAME}/*"
-                ]
+                "Resource": "*"
             }
         ]
     }
