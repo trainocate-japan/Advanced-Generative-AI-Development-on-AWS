@@ -13,7 +13,7 @@ Parameters:
 
   AssetsBucket:
     Type: String
-    Description: ハンズオン資材がアップロードされた S3 バケット名 (upload-assets.sh で作成)
+    Description: ハンズオン資材がアップロードされた S3 バケット名
 
   AssetsPrefix:
     Type: String
@@ -22,7 +22,82 @@ Parameters:
 
 Resources:
   # ==========================================================================
-  # IAM Role (Session Manager + Bedrock + S3 + その他 AWS サービス)
+  # VPC
+  # ==========================================================================
+  DemoVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: HandsonDemoVPC
+
+  DemoSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DemoVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: HandsonDemoSubnet
+
+  DemoIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: HandsonDemoIGW
+
+  DemoIGWAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DemoVPC
+      InternetGatewayId: !Ref DemoIGW
+
+  DemoRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DemoVPC
+      Tags:
+        - Key: Name
+          Value: HandsonDemoRT
+
+  DemoRoute:
+    Type: AWS::EC2::Route
+    DependsOn: DemoIGWAttachment
+    Properties:
+      RouteTableId: !Ref DemoRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref DemoIGW
+
+  DemoSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref DemoSubnet
+      RouteTableId: !Ref DemoRouteTable
+
+  # ==========================================================================
+  # Security Group (Inbound不要 - Session Manager経由のためアウトバウンドのみ)
+  # ==========================================================================
+  DemoSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Handson Demo - Session Manager only
+      VpcId: !Ref DemoVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound (SSM, Bedrock API, S3, etc.)
+      Tags:
+        - Key: Name
+          Value: HandsonDemoSG
+
+  # ==========================================================================
+  # IAM Role (Session Manager + Bedrock + S3 + その他)
   # ==========================================================================
   DemoInstanceRole:
     Type: AWS::IAM::Role
@@ -36,15 +111,13 @@ Resources:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
       ManagedPolicyArns:
-        # Session Manager に必要
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        # ハンズオンに必要なサービス
         - arn:aws:iam::aws:policy/AmazonBedrockFullAccess
         - arn:aws:iam::aws:policy/AmazonS3FullAccess
         - arn:aws:iam::aws:policy/CloudWatchFullAccessV2
         - arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
         - arn:aws:iam::aws:policy/AmazonSQSFullAccess
-        - arn:aws:iam::aws:policy/AmazonComprehendFullAccess
+        - arn:aws:iam::aws:policy/ComprehendFullAccess
         - arn:aws:iam::aws:policy/AWSCloudFormationFullAccess
         - arn:aws:iam::aws:policy/AWSLambda_FullAccess
         - arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator
@@ -68,18 +141,6 @@ Resources:
         - !Ref DemoInstanceRole
 
   # ==========================================================================
-  # Security Group (SSH不要 - Session Manager 経由のため最小限)
-  # ==========================================================================
-  DemoSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Handson Demo - Session Manager only (no inbound required)
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-          Description: Allow all outbound (SSM endpoints, Bedrock API, etc.)
-
-  # ==========================================================================
   # EC2 Instance
   # ==========================================================================
   DemoInstance:
@@ -87,7 +148,8 @@ Resources:
     Properties:
       InstanceType: !Ref InstanceType
       IamInstanceProfile: !Ref DemoInstanceProfile
-      SecurityGroups:
+      SubnetId: !Ref DemoSubnet
+      SecurityGroupIds:
         - !Ref DemoSecurityGroup
       ImageId: !FindInMap [RegionAMI, !Ref 'AWS::Region', AMI]
       BlockDeviceMappings:
@@ -104,7 +166,7 @@ Resources:
           Value: "true"
       UserData:
         Fn::Base64: !Sub |
-          #!/bin/bash -xe
+          #!/bin/bash -x
           exec > /var/log/user-data.log 2>&1
 
           echo "=========================================="
@@ -112,47 +174,26 @@ Resources:
           echo " $(date '+%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
 
-          # ------------------------------------------
-          # システム更新と基本ツール
-          # ------------------------------------------
-          echo "[1/7] システム更新..."
-          yum update -y
-          yum install -y python3.12 python3.12-pip jq unzip tar
+          # システム更新と基本ツール (Amazon Linux 2023 = dnf ベース)
+          echo "[1/6] システム更新..."
+          dnf update -y
+          dnf install -y python3.12 python3.12-pip jq unzip tar nodejs npm git
 
-          # Python のデフォルト設定
-          alternatives --install /usr/bin/python3 python3 /usr/bin/python3.12 1
-          alternatives --set python3 /usr/bin/python3.12
-          ln -sf /usr/bin/pip3.12 /usr/bin/pip3
-
-          # ------------------------------------------
-          # Python ライブラリ
-          # ------------------------------------------
-          echo "[2/7] Python ライブラリをインストール..."
+          # Python 設定
+          echo "[2/6] Python ライブラリ..."
           pip3.12 install --upgrade pip
-          pip3.12 install \
-            boto3 \
-            streamlit \
-            numpy \
-            pandas
+          pip3.12 install boto3 streamlit numpy pandas
 
-          # ------------------------------------------
           # AWS SAM CLI
-          # ------------------------------------------
-          echo "[3/7] AWS SAM CLI をインストール..."
+          echo "[3/6] SAM CLI..."
           pip3.12 install aws-sam-cli
 
-          # ------------------------------------------
-          # Node.js & AWS CDK
-          # ------------------------------------------
-          echo "[4/7] Node.js と CDK をインストール..."
-          curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
-          yum install -y nodejs
+          # AWS CDK
+          echo "[4/6] CDK..."
           npm install -g aws-cdk
 
-          # ------------------------------------------
           # S3 からハンズオン資材をダウンロード
-          # ------------------------------------------
-          echo "[5/7] S3 からハンズオン資材をダウンロード..."
+          echo "[5/6] S3 から資材ダウンロード..."
           WORK_DIR=/home/ec2-user/handson
           mkdir -p $WORK_DIR
           aws s3 cp s3://${AssetsBucket}/${AssetsPrefix}/handson.tar.gz /tmp/handson.tar.gz
@@ -160,12 +201,12 @@ Resources:
           rm -f /tmp/handson.tar.gz
           chown -R ec2-user:ec2-user $WORK_DIR
 
-          # ------------------------------------------
-          # M03 用 S3 バケットとサンプルドキュメント
-          # ------------------------------------------
-          echo "[6/7] デモ用 S3 リソースを準備..."
+          # M03用 S3 バケットとサンプルドキュメント
+          echo "[6/6] デモ用リソース準備..."
           AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-          AWS_REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+          TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+          AWS_REGION=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+          AWS_REGION=${AWS_REGION:-us-east-1}
           KB_BUCKET="legal-kb-demo-$AWS_ACCOUNT"
 
           if ! aws s3 ls "s3://$KB_BUCKET" 2>/dev/null; then
@@ -175,140 +216,30 @@ Resources:
               aws s3 mb "s3://$KB_BUCKET" --region "$AWS_REGION"
             fi
           fi
-
           if [ -d "$WORK_DIR/M03-data-automation/sample-docs" ]; then
             aws s3 sync "$WORK_DIR/M03-data-automation/sample-docs/" "s3://$KB_BUCKET/documents/" --quiet
           fi
 
-          # ------------------------------------------
-          # デモ実行ヘルパースクリプト
-          # ------------------------------------------
-          echo "[7/7] デモヘルパーを作成..."
-          cat > /home/ec2-user/run-demo.sh << 'HELPER'
-          #!/bin/bash
-          HANDSON_DIR="$HOME/handson"
-
-          show_menu() {
-              echo ""
-              echo "=============================================="
-              echo " ハンズオンデモ実行メニュー"
-              echo "=============================================="
-              echo ""
-              echo "  M01 - 基盤モデル選択・ベンチマーク比較"
-              echo "  M02 - データ検証・マルチモーダル処理"
-              echo "  M03 - RAG・ナレッジベース"
-              echo "  M04 - プロンプトエンジニアリング・CoT"
-              echo "  M05 - エージェント（旅行プランニング）"
-              echo "  M06 - Guardrails デモ"
-              echo "  M07 - パフォーマンス・キャッシング"
-              echo "  M08 - モニタリング・ハルシネーション検出"
-              echo "  M09 - テスト・評価フレームワーク"
-              echo "  M10 - エンタープライズ統合"
-              echo ""
-              echo "  all  - 全モジュールの環境確認"
-              echo "  quit - 終了"
-              echo ""
-              read -p "  実行するモジュール: " choice
-              run_module "$choice"
-          }
-
-          run_module() {
-              local module="$1"
-              case "$module" in
-                  M01|m01)
-                      echo "▶ M01: モデルベンチマーク実行中..."
-                      cd "$HANDSON_DIR/M01-model-selection"
-                      python3 benchmark.py
-                      ;;
-                  M02|m02)
-                      echo "▶ M02: データ検証パイプライン..."
-                      cd "$HANDSON_DIR/M02-bedrock-converse-api"
-                      echo "  [1] データ検証:"
-                      python3 data_validation.py
-                      echo ""
-                      echo "  [2] コンテキスト最適化:"
-                      python3 context_optimization.py
-                      ;;
-                  M03|m03)
-                      echo "▶ M03: RAG デモ..."
-                      cd "$HANDSON_DIR/M03-data-automation"
-                      python3 rag_basic.py
-                      ;;
-                  M04|m04)
-                      echo "▶ M04: プロンプトエンジニアリング..."
-                      cd "$HANDSON_DIR/M04-performance"
-                      python3 prompt_personas.py
-                      ;;
-                  M05|m05)
-                      echo "▶ M05: 旅行プランニングエージェント..."
-                      cd "$HANDSON_DIR/M05-prompt-management"
-                      python3 travel_agent.py
-                      ;;
-                  M06|m06|M07|m07|M08|m08|M09|m09|M10|m10)
-                      echo "▶ $module: steps.md を参照してください"
-                      ;;
-                  all)
-                      echo "▶ 環境確認..."
-                      echo ""
-                      echo "  Python: $(python3 --version)"
-                      echo "  boto3: $(python3 -c 'import boto3;print(boto3.__version__)')"
-                      echo "  AWS Region: $(aws configure get region)"
-                      echo "  AWS Account: $(aws sts get-caller-identity --query Account --output text)"
-                      echo ""
-                      for dir in "$HANDSON_DIR"/M*/; do
-                          module=$(basename "$dir")
-                          py_count=$(find "$dir" -maxdepth 1 -name "*.py" | wc -l)
-                          echo "  $module: $py_count scripts"
-                      done
-                      ;;
-                  quit|q)
-                      exit 0
-                      ;;
-                  *)
-                      echo "❌ 無効: $module"
-                      show_menu
-                      ;;
-              esac
-          }
-
-          if [ -n "$1" ]; then
-              run_module "$1"
-          else
-              show_menu
-          fi
-          HELPER
-
+          # デモ実行ヘルパー (S3 から取得済みのものをホームにコピー)
+          cp $WORK_DIR/run-demo.sh /home/ec2-user/run-demo.sh
           chmod +x /home/ec2-user/run-demo.sh
           chown ec2-user:ec2-user /home/ec2-user/run-demo.sh
 
-          # ------------------------------------------
-          # Bedrock モデルアクセス確認
-          # ------------------------------------------
+          # リージョン設定
+          sudo -u ec2-user aws configure set region $AWS_REGION
+
+          # Bedrock モデル確認
           echo ""
-          echo "=========================================="
-          echo " Bedrock モデルアクセス確認"
-          echo "=========================================="
+          echo "=== Bedrock モデルアクセス確認 ==="
           for model in amazon.nova-lite-v1:0 amazon.nova-pro-v1:0 amazon.titan-embed-text-v2:0; do
-            result=$(aws bedrock get-foundation-model --model-identifier "$model" --query "modelDetails.modelId" --output text 2>/dev/null || echo "UNAVAILABLE")
-            if [ "$result" != "UNAVAILABLE" ]; then
-              echo "  ✅ $model"
-            else
-              echo "  ⚠  $model (コンソールで有効化が必要)"
-            fi
+            r=$(aws bedrock get-foundation-model --model-identifier "$model" --query "modelDetails.modelId" --output text 2>/dev/null || echo "NG")
+            [ "$r" != "NG" ] && echo "  ✅ $model" || echo "  ⚠  $model (要有効化)"
           done
 
           echo ""
           echo "=========================================="
           echo " セットアップ完了! $(date '+%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
-          echo ""
-          echo " 接続方法: Session Manager"
-          echo "   aws ssm start-session --target $(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-          echo ""
-          echo " デモ実行:"
-          echo "   sudo su - ec2-user"
-          echo "   ./run-demo.sh"
-          echo ""
 
   # ==========================================================================
   # Auto Stop (EventBridge + Lambda: 毎日 23:00 JST に自動停止)
@@ -351,8 +282,7 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action:
-                  - ec2:StopInstances
+                Action: ec2:StopInstances
                 Resource: '*'
               - Effect: Allow
                 Action:
@@ -380,12 +310,12 @@ Resources:
       SourceArn: !GetAtt StopScheduleRule.Arn
 
 # ==========================================================================
-# AMI Mappings (Amazon Linux 2023)
+# Mappings
 # ==========================================================================
 Mappings:
   RegionAMI:
     us-east-1:
-      AMI: ami-0c02fb55956c7d316
+      AMI: ami-0bdc7d025135d7b49
     us-west-2:
       AMI: ami-0735c191cf914754d
     ap-northeast-1:
@@ -403,14 +333,18 @@ Outputs:
     Value: !Sub "aws ssm start-session --target ${DemoInstance} --region ${AWS::Region}"
     Description: Session Manager 接続コマンド
 
-  ConsoleSessionManager:
+  ConsoleURL:
     Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/systems-manager/session-manager/${DemoInstance}"
     Description: Session Manager コンソール URL
 
   StartCommand:
     Value: !Sub "aws ec2 start-instances --instance-ids ${DemoInstance} --region ${AWS::Region}"
-    Description: インスタンス起動コマンド (研修前日に実行)
+    Description: インスタンス起動コマンド
 
   StopCommand:
     Value: !Sub "aws ec2 stop-instances --instance-ids ${DemoInstance} --region ${AWS::Region}"
-    Description: インスタンス停止コマンド (研修後に実行)
+    Description: インスタンス停止コマンド
+
+  VpcId:
+    Value: !Ref DemoVPC
+    Description: VPC ID
