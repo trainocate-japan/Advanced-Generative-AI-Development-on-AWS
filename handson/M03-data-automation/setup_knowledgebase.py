@@ -77,8 +77,8 @@ def create_kb_role():
                     "s3vectors:ListIndexes"
                 ],
                 "Resource": [
-                    f"arn:aws:s3vectors:{REGION}:{ACCOUNT_ID}:vector-bucket/{VECTOR_BUCKET_NAME}",
-                    f"arn:aws:s3vectors:{REGION}:{ACCOUNT_ID}:vector-bucket/{VECTOR_BUCKET_NAME}/*"
+                    f"arn:aws:s3vectors:{REGION}:{ACCOUNT_ID}:bucket/{VECTOR_BUCKET_NAME}",
+                    f"arn:aws:s3vectors:{REGION}:{ACCOUNT_ID}:bucket/{VECTOR_BUCKET_NAME}/*"
                 ]
             }
         ]
