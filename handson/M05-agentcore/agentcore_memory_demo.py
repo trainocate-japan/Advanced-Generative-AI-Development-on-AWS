@@ -22,7 +22,7 @@ import time
 from datetime import datetime
 
 REGION = "us-east-1"
-MEMORY_NAME = "handson-travel-agent-memory"
+MEMORY_NAME = "handson_travel_agent_memory"
 
 control = boto3.client("bedrock-agentcore-control", region_name=REGION)
 data = boto3.client("bedrock-agentcore", region_name=REGION)
@@ -54,7 +54,7 @@ def create_memory():
     response = control.create_memory(
         name=MEMORY_NAME,
         description="旅行プランニングエージェント用メモリ",
-        eventExpiryDuration=86400,  # 1日（秒）- デモ用に短めに設定
+        eventExpiryDuration=30,  # 30日 - デモ用
         memoryStrategies=[
             {
                 "summaryMemoryStrategy": {

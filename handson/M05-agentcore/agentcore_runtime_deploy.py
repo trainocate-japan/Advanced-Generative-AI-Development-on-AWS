@@ -203,7 +203,7 @@ def get_memory_id():
         ctrl = boto3.client("bedrock-agentcore-control", region_name="us-east-1")
         memories = ctrl.list_memories()
         for mem in memories.get("memories", []):
-            if mem.get("name") == "handson-travel-agent-memory":
+            if mem.get("name") == "handson_travel_agent_memory":
                 return mem["id"]
     except Exception:
         pass
