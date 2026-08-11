@@ -62,17 +62,43 @@ class SlidingWindowManager:
             self._compress_history()
     
     def _compress_history(self):
-        """古い会話履歴を要約に圧縮"""
+        """古い会話履歴を Bedrock で要約に圧縮"""
         # 古いターン（最近5ターン以外）を要約
         old_turns = self.history[:-self.max_recent_turns * 2]
         
         if old_turns:
-            # 要約の生成（シンプル版）
-            old_content = " | ".join(
-                f"{t['role']}: {t['content'][:50]}" for t in old_turns
+            # Bedrock Converse API を使って会話を要約
+            conversation_text = "\n".join(
+                f"{t['role']}: {t['content']}" for t in old_turns
             )
-            self.summary = f"[過去の会話要約: {old_content[:200]}]"
+            self.summary = self._summarize_with_bedrock(conversation_text)
             self.history = self.history[-self.max_recent_turns * 2:]
+    
+    def _summarize_with_bedrock(self, conversation_text):
+        """Bedrock Converse API で会話履歴を要約する"""
+        prompt = (
+            "以下の会話履歴を3文以内で簡潔に要約してください。"
+            "重要な事実（数値、条件、決定事項）を優先的に残してください。\n\n"
+            f"会話履歴:\n{conversation_text}"
+        )
+        
+        try:
+            response = bedrock.converse(
+                modelId=MODEL_ID,
+                messages=[{
+                    "role": "user",
+                    "content": [{"text": prompt}]
+                }],
+                inferenceConfig={"temperature": 0.2, "maxTokens": 200}
+            )
+            summary = response['output']['message']['content'][0]['text']
+            print(f"    [要約生成] Bedrock で {len(conversation_text)} 文字 → {len(summary)} 文字に圧縮")
+            return summary
+        except Exception as e:
+            # フォールバック: API エラー時は簡易要約
+            print(f"    [要約生成] Bedrock エラー: {e}（簡易要約にフォールバック）")
+            old_content = conversation_text[:200]
+            return f"[過去の会話要約: {old_content}...]"
     
     def get_context(self):
         """現在のコンテキストを取得"""
