@@ -86,6 +86,14 @@ Resources:
         {
           "widgets": [
             {
+              "type": "text",
+              "width": 24,
+              "height": 1,
+              "properties": {
+                "markdown": "## Custom Metrics (Application Layer)"
+              }
+            },
+            {
               "type": "metric",
               "properties": {
                 "title": "Model Invocations by Provider",
@@ -135,6 +143,77 @@ Resources:
                   ["GenAI/ModelSelection", "EstimatedCost", "Provider", "amazon"]
                 ],
                 "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "text",
+              "width": 24,
+              "height": 1,
+              "properties": {
+                "markdown": "## Bedrock Standard Metrics (AWS/Bedrock)"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Bedrock Invocations (Standard)",
+                "metrics": [
+                  ["AWS/Bedrock", "Invocations", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet"}],
+                  ["AWS/Bedrock", "Invocations", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro"}],
+                  ["AWS/Bedrock", "Invocations", "ModelId", "amazon.nova-lite-v1:0", {"label": "Nova Lite"}]
+                ],
+                "period": 60,
+                "stat": "SampleCount",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Bedrock Invocation Latency (Standard)",
+                "metrics": [
+                  ["AWS/Bedrock", "InvocationLatency", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet"}],
+                  ["AWS/Bedrock", "InvocationLatency", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro"}],
+                  ["AWS/Bedrock", "InvocationLatency", "ModelId", "amazon.nova-lite-v1:0", {"label": "Nova Lite"}]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "yAxis": {"left": {"label": "ms"}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Bedrock Token Usage (Standard)",
+                "metrics": [
+                  ["AWS/Bedrock", "InputTokenCount", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet (Input)"}],
+                  ["AWS/Bedrock", "OutputTokenCount", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet (Output)"}],
+                  ["AWS/Bedrock", "InputTokenCount", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro (Input)"}],
+                  ["AWS/Bedrock", "OutputTokenCount", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro (Output)"}],
+                  ["AWS/Bedrock", "InputTokenCount", "ModelId", "amazon.nova-lite-v1:0", {"label": "Nova Lite (Input)"}],
+                  ["AWS/Bedrock", "OutputTokenCount", "ModelId", "amazon.nova-lite-v1:0", {"label": "Nova Lite (Output)"}]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "region": "${AWS::Region}"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Bedrock Errors & Throttles (Standard)",
+                "metrics": [
+                  ["AWS/Bedrock", "InvocationClientErrors", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet (ClientErr)"}],
+                  ["AWS/Bedrock", "InvocationServerErrors", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet (ServerErr)"}],
+                  ["AWS/Bedrock", "InvocationThrottles", "ModelId", "us.anthropic.claude-sonnet-4-5-20250929-v1:0", {"label": "Claude Sonnet (Throttle)"}],
+                  ["AWS/Bedrock", "InvocationClientErrors", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro (ClientErr)"}],
+                  ["AWS/Bedrock", "InvocationServerErrors", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro (ServerErr)"}],
+                  ["AWS/Bedrock", "InvocationThrottles", "ModelId", "amazon.nova-pro-v1:0", {"label": "Nova Pro (Throttle)"}]
+                ],
+                "period": 60,
                 "stat": "Sum",
                 "region": "${AWS::Region}"
               }

@@ -309,6 +309,35 @@ def invoke_fallback(query, reason):
     }
 
 
+def get_model_short_name(model_id):
+    """モデルIDからダッシュボード表示用の短縮名を返す"""
+    if 'claude-sonnet' in model_id:
+        return 'claude-sonnet'
+    elif 'nova-pro' in model_id:
+        return 'nova-pro'
+    elif 'nova-lite' in model_id:
+        return 'nova-lite'
+    elif 'nova-micro' in model_id:
+        return 'nova-micro'
+    # フォールバック: ドットで分割して最後の部分から推測
+    return model_id.split('.')[-1].split('-v')[0]
+
+
+# モデルごとの料金テーブル (USD per 1000 tokens)
+MODEL_PRICING = {
+    'claude-sonnet': {'input': 0.003, 'output': 0.015},
+    'nova-pro': {'input': 0.0008, 'output': 0.0032},
+    'nova-lite': {'input': 0.00006, 'output': 0.00024},
+}
+
+
+def estimate_cost(model_short, input_tokens, output_tokens):
+    """トークン使用量に基づいてコストを推定する"""
+    pricing = MODEL_PRICING.get(model_short, {'input': 0.001, 'output': 0.005})
+    cost = (input_tokens / 1000) * pricing['input'] + (output_tokens / 1000) * pricing['output']
+    return cost
+
+
 def publish_metrics(provider, model_id, latency, usage, success):
     """CloudWatch にカスタムメトリクスを送信する"""
     try:
@@ -322,7 +351,7 @@ def publish_metrics(provider, model_id, latency, usage, success):
         ]
 
         if success and usage:
-            model_short = model_id.split('.')[-1].split('-')[0]
+            model_short = get_model_short_name(model_id)
             metrics.extend([
                 {
                     'MetricName': 'Latency',
@@ -341,6 +370,12 @@ def publish_metrics(provider, model_id, latency, usage, success):
                     'Dimensions': [{'Name': 'Provider', 'Value': provider}],
                     'Value': usage['outputTokens'],
                     'Unit': 'Count'
+                },
+                {
+                    'MetricName': 'EstimatedCost',
+                    'Dimensions': [{'Name': 'Provider', 'Value': provider}],
+                    'Value': estimate_cost(model_short, usage['inputTokens'], usage['outputTokens']),
+                    'Unit': 'None'
                 }
             ])
 
