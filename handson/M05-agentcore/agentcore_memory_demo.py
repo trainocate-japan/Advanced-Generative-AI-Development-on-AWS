@@ -85,8 +85,8 @@ def create_memory():
             print(f"    → Memory は既に存在します。既存のものを使用します。")
             existing = find_existing_memory()
             if existing:
+                print(f"      ID: {existing['id']}")
                 return existing
-            # find が失敗した場合は名前で get を試す
             raise
         raise
 
@@ -115,18 +115,13 @@ def find_existing_memory():
     """既存 Memory を検索"""
     try:
         resp = control.list_memories()
-        # レスポンスのキーが memories または items の場合に対応
-        mem_list = resp.get("memories", resp.get("items", []))
-        for mem in mem_list:
-            if mem.get("name") == MEMORY_NAME:
-                # get_memory で詳細を取得
-                memory_id = mem.get("id") or mem.get("memoryId")
-                if memory_id:
-                    detail = control.get_memory(memoryId=memory_id)
-                    return detail.get("memory", mem)
+        for mem in resp.get("memories", []):
+            # id がメモリ名で始まる（例: handson_travel_agent_memory-XXXXXXXX）
+            mem_id = mem.get("id", "")
+            if mem_id.startswith(MEMORY_NAME):
                 return mem
     except Exception as e:
-        print(f"    (list_memories エラー: {e})")
+        print(f"    (list_memories: {e})")
     return None
 
 
