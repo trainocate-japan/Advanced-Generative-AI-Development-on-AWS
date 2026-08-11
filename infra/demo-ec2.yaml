@@ -133,6 +133,19 @@ Resources:
                   - bedrock-agent-runtime:*
                   - aoss:*
                 Resource: '*'
+        - PolicyName: SSMParameterStoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:PutParameter
+                  - ssm:GetParameter
+                  - ssm:GetParametersByPath
+                  - ssm:DeleteParameter
+                  - ssm:AddTagsToResource
+                  - ssm:RemoveTagsFromResource
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/*"
 
   DemoInstanceProfile:
     Type: AWS::IAM::InstanceProfile
