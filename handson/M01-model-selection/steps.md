@@ -120,7 +120,7 @@ curl -s -X POST $API_URL/query \
 # Anthropic (Claude) に timeout 障害をシミュレート
 curl -s -X POST $API_URL/admin/simulate-failure \
   -H "Content-Type: application/json" \
-  -d '{"provider": "us", "failure_type": "timeout"}' | python3.12 -m json.tool
+  -d '{"provider": "anthropic", "failure_type": "timeout"}' | python3.12 -m json.tool
 ```
 
 ### ステップ 3.4: フォールバック動作の確認
@@ -153,7 +153,7 @@ curl -s $API_URL/health | python3.12 -m json.tool
 # 障害を解除
 curl -s -X POST $API_URL/admin/simulate-failure \
   -H "Content-Type: application/json" \
-  -d '{"provider": "us", "failure_type": "none"}' | python3.12 -m json.tool
+  -d '{"provider": "anthropic", "failure_type": "none"}' | python3.12 -m json.tool
 
 # 30秒後（CB タイムアウト後）に complex クエリを送信 → Claude に復帰
 sleep 35
@@ -325,7 +325,7 @@ LLM as a Judge では、別のLLM（審査員モデル）が応答品質を評�
 
 1. `curl $API_URL/health` で全プロバイダー正常を確認
 2. complex クエリを送信 → Claude で応答されることを確認
-3. `curl -X POST $API_URL/admin/simulate-failure -d '{"provider":"us","failure_type":"timeout"}'` で障害発生
+3. `curl -X POST $API_URL/admin/simulate-failure -d '{"provider":"anthropic","failure_type":"timeout"}'` で障害発生
 4. 同じ complex クエリを送信 → Nova Pro にフォールバック（`fallback_used: true`）
 5. `curl $API_URL/health` でサーキットブレーカー OPEN を確認
 6. 障害解除 → 30秒後に再送信 → Claude に復帰
