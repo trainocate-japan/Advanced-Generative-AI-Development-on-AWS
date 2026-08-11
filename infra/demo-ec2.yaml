@@ -134,6 +134,7 @@ Resources:
                   - bedrock-agent:*
                   - bedrock-agent-runtime:*
                   - aoss:*
+                  - s3vectors:*
                 Resource: '*'
         - PolicyName: SSMParameterStoreAccess
           PolicyDocument:
@@ -205,7 +206,7 @@ Resources:
           # Python 設定
           echo "[2/6] Python ライブラリ..."
           pip3.12 install --upgrade pip
-          pip3.12 install boto3 streamlit numpy pandas
+          pip3.12 install boto3 streamlit numpy pandas opensearch-py requests-aws4auth
 
           # AWS SAM CLI
           echo "[3/6] SAM CLI..."
