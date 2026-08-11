@@ -169,7 +169,10 @@ Configure の対話プロンプトでの選択：
 
 ```bash
 # 2. Deploy（CodeBuild でリモートビルド、数分かかります）
+# 初回デプロイ:
 agentcore deploy
+# 既存エージェントを更新する場合:
+agentcore deploy --auto-update-on-conflict
 ```
 
 デプロイ完了後、Runtime 実行ロールに Memory アクセス権限を追加：
