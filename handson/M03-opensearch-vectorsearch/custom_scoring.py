@@ -23,7 +23,7 @@ credentials = session.get_credentials()
 
 # 設定
 REGION = 'us-east-1'
-INDEX_NAME = "legal-docs-scored"
+INDEX_NAME = "legal-docs"
 EMBEDDING_MODEL_ID = "amazon.titan-embed-text-v2:0"
 EMBEDDING_DIMENSIONS = 1024
 
@@ -212,183 +212,195 @@ def search_basic_knn(client, query, size=5):
                 }
             }
         },
-        "_source": ["title", "content", "category", "section", "published_date", "view_count", "importance"]
+        "_source": ["title", "content", "category", "section"]
     }
     return client.search(index=INDEX_NAME, body=search_body)
 
 
-def search_with_recency_boost(client, query, size=5, decay_rate=0.01):
-    """時間減衰付きスコアリング: 新しいドキュメントを優先"""
+def search_with_recency_boost(client, query, size=10, decay_rate=0.01):
+    """
+    時間減衰付きスコアリング（クライアントサイド）
+
+    OpenSearch Serverless では script_score が使用できないため、
+    k-NN 検索結果をクライアントサイドでリスコアリングする方式で実装。
+    本番環境では OpenSearch Service（マネージドドメイン）で script_score を使用可能。
+    """
+    import math
+    from datetime import datetime
+
     query_vector = get_embedding(query)
     search_body = {
         "size": size,
         "query": {
-            "script_score": {
-                "query": {
-                    "knn": {
-                        "content_vector": {
-                            "vector": query_vector,
-                            "k": size * 3
-                        }
-                    }
-                },
-                "script": {
-                    "source": f"""
-                        double knn_score = _score;
-                        long now_millis = new Date().getTime();
-                        long doc_millis = doc['published_date'].value.toInstant().toEpochMilli();
-                        double days_diff = (now_millis - doc_millis) / (1000.0 * 60 * 60 * 24);
-                        double recency_factor = Math.exp(-{decay_rate} * days_diff);
-                        return knn_score * (0.7 + 0.3 * recency_factor);
-                    """
+            "knn": {
+                "content_vector": {
+                    "vector": query_vector,
+                    "k": size
                 }
             }
         },
-        "_source": ["title", "content", "category", "section", "published_date", "view_count", "importance"]
+        "_source": ["title", "content", "category", "section"]
     }
-    return client.search(index=INDEX_NAME, body=search_body)
+    response = client.search(index=INDEX_NAME, body=search_body)
+
+    # クライアントサイドでリスコアリング
+    # （注: legal-docs インデックスには published_date がないためシミュレーション）
+    now = datetime.now()
+    for hit in response['hits']['hits']:
+        knn_score = hit['_score']
+        # ドキュメント位置に基づく擬似的な時間減衰（デモ用）
+        # 上位チャンクを「新しい」とみなしてスコア微調整
+        idx = response['hits']['hits'].index(hit)
+        days_diff = idx * 30  # 各ドキュメントを30日ずつ古いとみなす
+        recency_factor = math.exp(-decay_rate * days_diff)
+        hit['_score'] = knn_score * (0.7 + 0.3 * recency_factor)
+        hit['_recency_factor'] = recency_factor
+
+    # リスコア後にソート
+    response['hits']['hits'].sort(key=lambda x: x['_score'], reverse=True)
+    response['hits']['hits'] = response['hits']['hits'][:5]
+    return response
 
 
-def search_with_category_boost(client, query, boost_category, size=5, boost_factor=1.5):
-    """カテゴリブースト: 特定カテゴリのスコアを増幅"""
+def search_with_category_boost(client, query, boost_category, size=10, boost_factor=1.5):
+    """
+    カテゴリブースト（クライアントサイド）
+
+    指定カテゴリに属するドキュメントのスコアを boost_factor 倍にする。
+    """
     query_vector = get_embedding(query)
     search_body = {
         "size": size,
         "query": {
-            "script_score": {
-                "query": {
-                    "knn": {
-                        "content_vector": {
-                            "vector": query_vector,
-                            "k": size * 3
-                        }
-                    }
-                },
-                "script": {
-                    "source": f"""
-                        double knn_score = _score;
-                        double boost = 1.0;
-                        if (doc['category'].value == '{boost_category}') {{
-                            boost = {boost_factor};
-                        }}
-                        return knn_score * boost;
-                    """,
+            "knn": {
+                "content_vector": {
+                    "vector": query_vector,
+                    "k": size
                 }
             }
         },
-        "_source": ["title", "content", "category", "section", "published_date", "view_count", "importance"]
+        "_source": ["title", "content", "category", "section"]
     }
-    return client.search(index=INDEX_NAME, body=search_body)
+    response = client.search(index=INDEX_NAME, body=search_body)
+
+    # クライアントサイドでカテゴリブースト
+    for hit in response['hits']['hits']:
+        category = hit['_source'].get('category', '')
+        if category == boost_category:
+            hit['_score'] *= boost_factor
+            hit['_boosted'] = True
+        else:
+            hit['_boosted'] = False
+
+    response['hits']['hits'].sort(key=lambda x: x['_score'], reverse=True)
+    response['hits']['hits'] = response['hits']['hits'][:5]
+    return response
 
 
-def search_with_popularity_boost(client, query, size=5):
-    """人気度ブースト: 閲覧回数に基づく加点"""
+def search_with_popularity_boost(client, query, size=10):
+    """
+    人気度ブースト（クライアントサイド）
+
+    閲覧回数に基づく加点をシミュレーション。
+    """
+    import math
+
     query_vector = get_embedding(query)
     search_body = {
         "size": size,
         "query": {
-            "script_score": {
-                "query": {
-                    "knn": {
-                        "content_vector": {
-                            "vector": query_vector,
-                            "k": size * 3
-                        }
-                    }
-                },
-                "script": {
-                    "source": """
-                        double knn_score = _score;
-                        double views = doc['view_count'].value;
-                        double popularity_factor = 1.0 + Math.log1p(views) / 10.0;
-                        return knn_score * popularity_factor;
-                    """
+            "knn": {
+                "content_vector": {
+                    "vector": query_vector,
+                    "k": size
                 }
             }
         },
-        "_source": ["title", "content", "category", "section", "published_date", "view_count", "importance"]
+        "_source": ["title", "content", "category", "section"]
     }
-    return client.search(index=INDEX_NAME, body=search_body)
+    response = client.search(index=INDEX_NAME, body=search_body)
+
+    # クライアントサイドで人気度ブースト（擬似データ使用）
+    import random
+    random.seed(42)
+    for hit in response['hits']['hits']:
+        knn_score = hit['_score']
+        view_count = random.randint(10, 500)  # デモ用の擬似閲覧数
+        popularity_factor = 1.0 + math.log1p(view_count) / 10.0
+        hit['_score'] = knn_score * popularity_factor
+        hit['_source']['view_count'] = view_count
+
+    response['hits']['hits'].sort(key=lambda x: x['_score'], reverse=True)
+    response['hits']['hits'] = response['hits']['hits'][:5]
+    return response
 
 
-def search_composite(client, query, size=5):
-    """複合スコアリング: k-NN + 時間減衰 + 人気度 + 重要度"""
+def search_composite(client, query, size=10):
+    """
+    複合スコアリング（クライアントサイド）
+
+    k-NN スコア × 0.6 + 時間減衰 × 0.15 + 人気度 × 0.1 + 重要度 × 0.15
+    """
+    import math
+    import random
+    random.seed(42)
+
     query_vector = get_embedding(query)
     search_body = {
         "size": size,
         "query": {
-            "script_score": {
-                "query": {
-                    "knn": {
-                        "content_vector": {
-                            "vector": query_vector,
-                            "k": size * 3
-                        }
-                    }
-                },
-                "script": {
-                    "source": """
-                        double knn_score = _score;
-                        
-                        // 時間減衰
-                        long now_millis = new Date().getTime();
-                        long doc_millis = doc['published_date'].value.toInstant().toEpochMilli();
-                        double days_diff = (now_millis - doc_millis) / (1000.0 * 60 * 60 * 24);
-                        double recency = Math.exp(-0.005 * days_diff);
-                        
-                        // 人気度（対数スケール）
-                        double popularity = Math.log1p(doc['view_count'].value) / 10.0;
-                        
-                        // 重要度
-                        double importance = doc['importance'].value;
-                        
-                        // 複合スコア
-                        return knn_score * 0.6 + recency * 0.15 + popularity * 0.1 + importance * 0.15;
-                    """
+            "knn": {
+                "content_vector": {
+                    "vector": query_vector,
+                    "k": size
                 }
             }
         },
-        "_source": ["title", "content", "category", "section", "published_date", "view_count", "importance"]
+        "_source": ["title", "content", "category", "section"]
     }
-    return client.search(index=INDEX_NAME, body=search_body)
+    response = client.search(index=INDEX_NAME, body=search_body)
+
+    for i, hit in enumerate(response['hits']['hits']):
+        knn_score = hit['_score']
+        days_diff = i * 20
+        recency = math.exp(-0.005 * days_diff)
+        views = random.randint(10, 500)
+        popularity = math.log1p(views) / 10.0
+        importance = random.uniform(0.5, 1.0)
+
+        composite = knn_score * 0.6 + recency * 0.15 + popularity * 0.1 + importance * 0.15
+        hit['_score'] = composite
+        hit['_source']['view_count'] = views
+        hit['_source']['importance'] = round(importance, 2)
+
+    response['hits']['hits'].sort(key=lambda x: x['_score'], reverse=True)
+    response['hits']['hits'] = response['hits']['hits'][:5]
+    return response
 
 
 def search_with_filter(client, query, category=None, size=5):
-    """フィルタリング + カスタムスコアリング"""
+    """フィルタリング + k-NN 検索"""
     query_vector = get_embedding(query)
 
-    # フィルタ条件
-    filter_clause = {"match_all": {}}
-    if category:
-        filter_clause = {"term": {"category": category}}
-
+    # bool + knn + filter の組み合わせ
     search_body = {
         "size": size,
         "query": {
-            "script_score": {
-                "query": {
-                    "bool": {
-                        "must": {
-                            "knn": {
-                                "content_vector": {
-                                    "vector": query_vector,
-                                    "k": size * 3
-                                }
-                            }
-                        },
-                        "filter": filter_clause
+            "bool": {
+                "must": {
+                    "knn": {
+                        "content_vector": {
+                            "vector": query_vector,
+                            "k": size
+                        }
                     }
                 },
-                "script": {
-                    "source": """
-                        double knn_score = _score;
-                        double importance = doc['importance'].value;
-                        return knn_score * (0.8 + 0.2 * importance);
-                    """
-                }
+                "filter": {
+                    "term": {"category": category}
+                } if category else {"match_all": {}}
             }
         },
-        "_source": ["title", "content", "category", "section", "published_date", "view_count", "importance"]
+        "_source": ["title", "content", "category", "section"]
     }
     return client.search(index=INDEX_NAME, body=search_body)
 
@@ -409,8 +421,9 @@ def display_results(response, label):
         source = hit['_source']
         content_preview = source['content'][:80].replace('\n', ' ')
         print(f"\n  [{i + 1}] スコア: {score:.4f}")
-        print(f"      カテゴリ: {source['category']} | セクション: {source['section']}")
-        print(f"      公開日: {source['published_date']} | 閲覧数: {source['view_count']} | 重要度: {source['importance']}")
+        print(f"      カテゴリ: {source.get('category', 'N/A')} | セクション: {source.get('section', 'N/A')}")
+        if 'view_count' in source:
+            print(f"      閲覧数: {source.get('view_count', '-')} | 重要度: {source.get('importance', '-')}")
         print(f"      内容: {content_preview}...")
 
     return hits
