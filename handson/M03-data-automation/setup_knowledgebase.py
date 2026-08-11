@@ -208,8 +208,7 @@ def create_knowledge_base(role_arn, vector_bucket_arn, index_arn):
                 "type": "S3_VECTORS",
                 "s3VectorsConfiguration": {
                     "vectorBucketArn": vector_bucket_arn,
-                    "indexArn": index_arn,
-                    "indexName": VECTOR_INDEX_NAME
+                    "indexArn": index_arn
                 }
             }
         )
