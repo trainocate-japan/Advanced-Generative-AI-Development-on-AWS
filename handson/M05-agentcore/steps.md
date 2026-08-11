@@ -206,6 +206,9 @@ aws iam put-role-policy \
 ```bash
 # 3. 呼び出しテスト（権限反映まで1分ほど待つ）
 agentcore invoke '{"prompt": "東京から沖縄の2泊3日旅行プランを作って"}'
+
+# 複数エージェントがある場合は --agent-name で指定
+agentcore invoke '{"prompt": "東京から沖縄の2泊3日旅行プランを作って"}' --agent-name travel_agent
 ```
 
 ※ 前ステップで作成した Gateway と Memory が自動検出され、エージェントコードに組み込まれます。
