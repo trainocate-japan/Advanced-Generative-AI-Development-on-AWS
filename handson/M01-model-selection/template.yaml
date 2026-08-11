@@ -54,7 +54,6 @@ Resources:
                 - ssm:GetParameter
                 - ssm:GetParametersByPath
                 - ssm:PutParameter
-                - ssm:DeleteParameter
               Resource:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/model-selection/simulate-failure/*"
       Events:
@@ -76,6 +75,31 @@ Resources:
             RestApiId: !Ref ModelSelectionApi
             Path: /admin/simulate-failure
             Method: post
+
+  # SSM Parameters for failure simulation
+  FailureSimAnthropicParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /genai/model-selection/simulate-failure/anthropic
+      Type: String
+      Value: "none"
+      Description: "Failure simulation for anthropic provider (none|error|timeout)"
+
+  FailureSimAmazonParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /genai/model-selection/simulate-failure/amazon
+      Type: String
+      Value: "none"
+      Description: "Failure simulation for amazon provider (none|error|timeout)"
+
+  FailureSimMetaParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /genai/model-selection/simulate-failure/meta
+      Type: String
+      Value: "none"
+      Description: "Failure simulation for meta provider (none|error|timeout)"
 
   # CloudWatch Dashboard
   MonitoringDashboard:

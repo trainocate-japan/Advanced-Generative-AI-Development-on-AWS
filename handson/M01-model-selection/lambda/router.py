@@ -40,7 +40,10 @@ def get_simulated_failure(provider):
         response = ssm.get_parameter(
             Name=f"{FAILURE_SIM_PREFIX}{provider}"
         )
-        return response['Parameter']['Value']
+        value = response['Parameter']['Value']
+        if value == "none":
+            return None
+        return value
     except ssm.exceptions.ParameterNotFound:
         return None
     except Exception as e:
@@ -432,7 +435,7 @@ def lambda_handler(event, context):
         failure_type = body.get('failure_type', 'none')
 
         if failure_type == 'none':
-            remove_simulated_failure(provider)
+            set_simulated_failure(provider, 'none')
             msg = f"Failure simulation removed for {provider}"
         else:
             set_simulated_failure(provider, failure_type)
