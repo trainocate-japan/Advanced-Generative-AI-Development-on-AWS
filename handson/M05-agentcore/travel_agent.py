@@ -1,7 +1,7 @@
 """
 モジュール 5: エージェンティック AI - 旅行プランニングエージェント
-- Strands Agents パターンでのエージェント構築
-- ツール定義と自律的呼び出し
+- Bedrock Converse API の toolUse によるツール自律選択
+- モデルが自ら必要なツールを判断し呼び出すエージェントループ
 - メモリ管理とコンテキスト保持
 """
 
@@ -28,7 +28,7 @@ def search_flights(origin, destination, date, max_budget=None):
         {"airline": "ANA", "departure": "14:00", "arrival": "16:30", "price": 55000, "class": "プレミアムクラス"},
     ]
     if max_budget:
-        flights = [f for f in flights if f["price"] <= max_budget]
+        flights = [f for f in flights if f["price"] <= int(max_budget)]
     return {
         "tool": "search_flights",
         "params": {"origin": origin, "destination": destination, "date": date},
@@ -45,7 +45,7 @@ def search_hotels(city, checkin, checkout, max_budget_per_night=None):
         {"name": "ゲストハウス美ら海", "price_per_night": 5000, "rating": 3.8, "type": "ゲストハウス"},
     ]
     if max_budget_per_night:
-        hotels = [h for h in hotels if h["price_per_night"] <= max_budget_per_night]
+        hotels = [h for h in hotels if h["price_per_night"] <= int(max_budget_per_night)]
     return {
         "tool": "search_hotels",
         "params": {"city": city, "checkin": checkin, "checkout": checkout},
@@ -70,8 +70,9 @@ def get_weather(city, date):
 
 def calculate_budget(flights, hotel_per_night, nights, activities=0):
     """予算計算ツール"""
-    flight_cost = flights * 2  # 往復
-    hotel_cost = hotel_per_night * nights
+    flight_cost = int(flights) * 2  # 往復
+    hotel_cost = int(hotel_per_night) * int(nights)
+    activities = int(activities)
     total = flight_cost + hotel_cost + activities
     return {
         "tool": "calculate_budget",
@@ -84,8 +85,17 @@ def calculate_budget(flights, hotel_per_night, nights, activities=0):
     }
 
 
+# ツール名から関数へのマッピング
+TOOL_FUNCTIONS = {
+    "search_flights": search_flights,
+    "search_hotels": search_hotels,
+    "get_weather": get_weather,
+    "calculate_budget": calculate_budget,
+}
+
+
 # ======================================================================
-# エージェント実装
+# ツールスキーマ（Converse API の toolConfig 形式）
 # ======================================================================
 
 TOOLS_SCHEMA = [
@@ -93,248 +103,246 @@ TOOLS_SCHEMA = [
         "name": "search_flights",
         "description": "フライトを検索します。出発地、目的地、日付を指定して利用可能なフライトを返します。",
         "parameters": {
-            "origin": "出発空港（例: 東京）",
-            "destination": "到着空港（例: 沖縄）",
-            "date": "搭乗日（例: 2025-02-15）",
-            "max_budget": "予算上限（オプション）"
-        }
+            "origin": {"type": "string", "description": "出発空港（例: 東京）"},
+            "destination": {"type": "string", "description": "到着空港（例: 沖縄）"},
+            "date": {"type": "string", "description": "搭乗日（例: 2025-02-15）"},
+            "max_budget": {"type": "string", "description": "予算上限（オプション）"},
+        },
+        "required": ["origin", "destination", "date"],
     },
     {
         "name": "search_hotels",
         "description": "ホテルを検索します。都市、日付、予算を指定して利用可能なホテルを返します。",
         "parameters": {
-            "city": "都市名",
-            "checkin": "チェックイン日",
-            "checkout": "チェックアウト日",
-            "max_budget_per_night": "1泊あたりの予算上限（オプション）"
-        }
+            "city": {"type": "string", "description": "都市名"},
+            "checkin": {"type": "string", "description": "チェックイン日"},
+            "checkout": {"type": "string", "description": "チェックアウト日"},
+            "max_budget_per_night": {"type": "string", "description": "1泊あたりの予算上限（オプション）"},
+        },
+        "required": ["city", "checkin", "checkout"],
     },
     {
         "name": "get_weather",
         "description": "指定した都市と日付の天気予報を取得します。",
         "parameters": {
-            "city": "都市名",
-            "date": "日付"
-        }
+            "city": {"type": "string", "description": "都市名"},
+            "date": {"type": "string", "description": "日付"},
+        },
+        "required": ["city", "date"],
     },
     {
         "name": "calculate_budget",
-        "description": "旅行の総予算を計算します。",
+        "description": "旅行の総予算を計算します。フライト片道料金、ホテル1泊料金、宿泊数、アクティビティ費用を指定します。",
         "parameters": {
-            "flights": "片道フライト料金",
-            "hotel_per_night": "1泊あたりのホテル料金",
-            "nights": "宿泊数",
-            "activities": "アクティビティ費用"
-        }
-    }
+            "flights": {"type": "string", "description": "片道フライト料金（数値）"},
+            "hotel_per_night": {"type": "string", "description": "1泊あたりのホテル料金（数値）"},
+            "nights": {"type": "string", "description": "宿泊数（数値）"},
+            "activities": {"type": "string", "description": "アクティビティ費用（数値、デフォルト0）"},
+        },
+        "required": ["flights", "hotel_per_night", "nights"],
+    },
 ]
 
 
-class TravelPlanningAgent:
-    """旅行プランニングエージェント"""
+def build_tool_config():
+    """TOOLS_SCHEMA から Converse API の toolConfig を構築"""
+    tools = []
+    for schema in TOOLS_SCHEMA:
+        tool_spec = {
+            "toolSpec": {
+                "name": schema["name"],
+                "description": schema["description"],
+                "inputSchema": {
+                    "json": {
+                        "type": "object",
+                        "properties": schema["parameters"],
+                        "required": schema.get("required", []),
+                    }
+                },
+            }
+        }
+        tools.append(tool_spec)
+    return {"tools": tools}
 
-    def __init__(self):
-        self.memory = []  # 会話履歴
-        self.tool_calls = []  # ツール呼び出し履歴
-        self.system_prompt = """あなたは経験豊富な旅行プランニングアシスタントです。
+
+# ======================================================================
+# エージェント実装（Converse API + ツール自律選択ループ）
+# ======================================================================
+
+SYSTEM_PROMPT = """あなたは経験豊富な旅行プランニングアシスタントです。
 
 あなたの役割:
 - ユーザーの旅行要件を理解する
 - 利用可能なツールを使って情報を収集する
 - 予算内で最適な旅行プランを提案する
 
-利用可能なツール:
-- search_flights: フライト検索
-- search_hotels: ホテル検索
-- get_weather: 天気予報
-- calculate_budget: 予算計算
-
 行動指針:
-1. ユーザーの要件を確認する（目的地、日程、予算、人数）
-2. フライトを検索する
-3. ホテルを検索する
-4. 天気を確認する
-5. 予算を計算する
-6. 最適なプランを提案する
+1. まずフライトを検索する
+2. 次にホテルを検索する
+3. 天気を確認する
+4. 予算を計算する
+5. 全情報を統合して最適なプランを提案する
 
 回答形式:
-- まず収集した情報を整理する
-- 予算内の最適プランを提案する
+- 予算内の最適プランを日本語で提案する
+- フライト、ホテル、天気、予算の内訳を含める
 - 代替案も提示する"""
 
-    def plan_trip(self, user_request):
-        """旅行プランの自律的な作成"""
+
+class TravelPlanningAgent:
+    """
+    旅行プランニングエージェント
+
+    Bedrock Converse API の toolUse 機能を使い、
+    モデルが自律的にどのツールを呼ぶか判断するエージェントループを実装。
+    """
+
+    def __init__(self):
+        self.messages = []
+        self.tool_call_count = 0
+        self.tool_config = build_tool_config()
+
+    def run(self, user_request, max_iterations=10):
+        """エージェントループの実行"""
+        print(f"\n{'=' * 70}")
+        print("  旅行プランニングエージェント（自律ツール選択）")
+        print(f"{'=' * 70}")
         print(f"\n  ユーザー: {user_request}")
         print(f"\n  {'─' * 60}")
-        print("  エージェント思考過程:")
+        print("  エージェント実行ログ:")
         print(f"  {'─' * 60}")
 
-        # 要件の解析（簡易版 - 本番ではLLMで解析）
-        params = self._parse_request(user_request)
+        # ユーザーメッセージをセット
+        self.messages = [
+            {"role": "user", "content": [{"text": user_request}]}
+        ]
 
-        # ツール呼び出し（自律的な実行）
-        print(f"\n  [ステップ1] フライト検索...")
-        flights = search_flights(
-            params["origin"], params["destination"], params["date"],
-            max_budget=params.get("flight_budget")
-        )
-        self.tool_calls.append(flights)
-        print(f"    → {len(flights['results'])} 件のフライトが見つかりました")
-        for f in flights['results'][:3]:
-            print(f"      • {f['airline']} {f['departure']}発 ¥{f['price']:,} ({f['class']})")
-
-        print(f"\n  [ステップ2] ホテル検索...")
-        hotels = search_hotels(
-            params["destination"],
-            params["date"],
-            params.get("checkout", params["date"]),
-            max_budget_per_night=params.get("hotel_budget")
-        )
-        self.tool_calls.append(hotels)
-        print(f"    → {len(hotels['results'])} 件のホテルが見つかりました")
-        for h in hotels['results'][:3]:
-            print(f"      • {h['name']} ¥{h['price_per_night']:,}/泊 (★{h['rating']})")
-
-        print(f"\n  [ステップ3] 天気確認...")
-        weather = get_weather(params["destination"], params["date"])
-        self.tool_calls.append(weather)
-        w = weather['results']
-        print(f"    → {w['condition']} ({w['low_temp']}~{w['high_temp']}℃, 降水確率{w['rain_probability']}%)")
-
-        print(f"\n  [ステップ4] 予算計算...")
-        if flights['results'] and hotels['results']:
-            best_flight = flights['results'][0]
-            best_hotel = hotels['results'][0]
-            budget = calculate_budget(
-                best_flight['price'],
-                best_hotel['price_per_night'],
-                params.get("nights", 2),
-                activities=10000
+        # エージェントループ: モデルが end_turn を返すまで繰り返す
+        for iteration in range(max_iterations):
+            # Converse API 呼び出し
+            response = bedrock.converse(
+                modelId=MODEL_ID,
+                messages=self.messages,
+                system=[{"text": SYSTEM_PROMPT}],
+                toolConfig=self.tool_config,
+                inferenceConfig={"temperature": 0.3, "maxTokens": 2000},
             )
-            self.tool_calls.append(budget)
-            b = budget['results']
-            print(f"    → 総額: ¥{b['total']:,}")
-            print(f"      (フライト往復: ¥{b['flight_round_trip']:,} + ホテル: ¥{b['hotel_total']:,} + アクティビティ: ¥{b['activities']:,})")
 
-        # 最終プラン生成
+            stop_reason = response["stopReason"]
+            assistant_message = response["output"]["message"]
+            self.messages.append(assistant_message)
+
+            # レスポンスの処理
+            if stop_reason == "tool_use":
+                # モデルがツール呼び出しを要求
+                tool_results = self._handle_tool_use(assistant_message)
+                # ツール結果をメッセージに追加して次のイテレーションへ
+                self.messages.append({"role": "user", "content": tool_results})
+
+            elif stop_reason == "end_turn":
+                # モデルが最終回答を生成
+                self._print_final_response(assistant_message)
+                break
+
+            else:
+                print(f"\n  [予期しない停止理由: {stop_reason}]")
+                break
+
+        print(f"\n  {'─' * 60}")
+        print(f"  ツール呼び出し回数: {self.tool_call_count}")
+        print(f"  {'─' * 60}")
+
+    def _handle_tool_use(self, assistant_message):
+        """モデルが要求したツール呼び出しを実行"""
+        tool_results = []
+
+        for content_block in assistant_message["content"]:
+            if "toolUse" in content_block:
+                tool_use = content_block["toolUse"]
+                tool_name = tool_use["name"]
+                tool_input = tool_use["input"]
+                tool_use_id = tool_use["toolUseId"]
+
+                self.tool_call_count += 1
+                print(f"\n  [ツール呼び出し #{self.tool_call_count}] {tool_name}")
+                print(f"    パラメータ: {json.dumps(tool_input, ensure_ascii=False)}")
+
+                # ツール関数を実行
+                try:
+                    func = TOOL_FUNCTIONS[tool_name]
+                    result = func(**tool_input)
+                    result_json = json.dumps(result, ensure_ascii=False)
+                    print(f"    結果: {result_json[:100]}{'...' if len(result_json) > 100 else ''}")
+
+                    tool_results.append({
+                        "toolResult": {
+                            "toolUseId": tool_use_id,
+                            "content": [{"json": result}],
+                        }
+                    })
+                except Exception as e:
+                    print(f"    エラー: {e}")
+                    tool_results.append({
+                        "toolResult": {
+                            "toolUseId": tool_use_id,
+                            "content": [{"text": f"エラー: {str(e)}"}],
+                            "status": "error",
+                        }
+                    })
+
+            elif "text" in content_block:
+                # モデルの思考過程（ツール呼び出し前のテキスト）
+                thought = content_block["text"]
+                if thought.strip():
+                    print(f"\n  [思考] {thought[:80]}{'...' if len(thought) > 80 else ''}")
+
+        return tool_results
+
+    def _print_final_response(self, assistant_message):
+        """最終回答の表示"""
         print(f"\n  {'─' * 60}")
         print("  最終提案:")
         print(f"  {'─' * 60}")
+        for content_block in assistant_message["content"]:
+            if "text" in content_block:
+                print(f"\n{content_block['text']}")
 
-        self._generate_proposal(params, flights, hotels, weather, budget)
 
-        # メモリに保存
-        self.memory.append({
-            "request": user_request,
-            "params": params,
-            "tool_calls": len(self.tool_calls),
-            "timestamp": datetime.now().isoformat()
-        })
-
-    def _parse_request(self, request):
-        """リクエストの解析（シンプル版）"""
-        # 本番ではLLMで解析
-        params = {
-            "origin": "東京",
-            "destination": "沖縄",
-            "date": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d"),
-            "nights": 2,
-            "budget": 100000,
-            "flight_budget": 40000,
-            "hotel_budget": 25000,
-        }
-        params["checkout"] = (
-            datetime.strptime(params["date"], "%Y-%m-%d") + timedelta(days=params["nights"])
-        ).strftime("%Y-%m-%d")
-        return params
-
-    def _generate_proposal(self, params, flights, hotels, weather, budget):
-        """提案の生成"""
-        try:
-            context = f"""
-以下の情報を基に、旅行プランを提案してください:
-
-目的地: {params['destination']}
-日程: {params['date']} から {params['nights']}泊
-予算: ¥{params['budget']:,}
-
-フライト候補: {json.dumps(flights['results'][:3], ensure_ascii=False)}
-ホテル候補: {json.dumps(hotels['results'][:3], ensure_ascii=False)}
-天気: {json.dumps(weather['results'], ensure_ascii=False)}
-予算計算: {json.dumps(budget['results'], ensure_ascii=False)}
-
-予算内で最適なプランを提案してください。"""
-
-            response = bedrock.converse(
-                modelId=MODEL_ID,
-                messages=[{"role": "user", "content": [{"text": context}]}],
-                inferenceConfig={"temperature": 0.3, "maxTokens": 800}
-            )
-            proposal = response['output']['message']['content'][0]['text']
-            print(f"\n{proposal}")
-        except Exception as e:
-            print(f"\n  プラン概要:")
-            print(f"  • フライト: {flights['results'][0]['airline']} ¥{flights['results'][0]['price']:,}")
-            print(f"  • ホテル: {hotels['results'][0]['name']} ¥{hotels['results'][0]['price_per_night']:,}/泊")
-            print(f"  • 天気: {weather['results']['condition']}")
-            print(f"  • 総額: ¥{budget['results']['total']:,}")
-
+# ======================================================================
+# メイン実行
+# ======================================================================
 
 def demo_agent():
     """エージェントのデモ実行"""
-    print("=" * 70)
-    print("  旅行プランニングエージェント（Strands Agents パターン）")
-    print("=" * 70)
-
     agent = TravelPlanningAgent()
-    agent.plan_trip("来月東京から沖縄に2泊3日で旅行したいです。予算は10万円以内で。")
+    agent.run("来月東京から沖縄に2泊3日で旅行したいです。予算は10万円以内で。")
 
     # AgentCore の説明
     print(f"\n\n{'=' * 70}")
     print("  Amazon Bedrock AgentCore のコンポーネント")
     print(f"{'=' * 70}")
     print("""
+  上のデモでは、モデルが自律的にツールを選択・実行しました。
+  これが「エージェンティック AI」の基本パターンです。
+
   ┌─────────────────────────────────────────────────────────────────┐
-  │ AgentCore Gateway                                                │
-  │  • ツールの自動検出とインデックス作成                            │
-  │  • セマンティック検索で最適なツールを選択                        │
-  │  • MCP サーバー、Lambda、API を統一的に管理                     │
-  └─────────────────────────────────────────────────────────────────┘
-  
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ AgentCore Memory                                                 │
-  │  • 短期記憶: 現在のセッション                                   │
-  │  • 長期記憶: ユーザー嗜好、過去の対話                          │
-  │  • セマンティック記憶: 知識の構造化                             │
-  └─────────────────────────────────────────────────────────────────┘
-  
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ AgentCore Runtime                                                │
-  │  • サーバーレスでエージェントを実行                              │
-  │  • オートスケーリング                                           │
-  │  • 長時間実行ワークフローのサポート                             │
-  └─────────────────────────────────────────────────────────────────┘
-  
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ AgentCore Identity & Policy                                      │
-  │  • エージェントに固有のIDを付与                                 │
-  │  • ツール呼び出し前にポリシーチェック                           │
-  │  • 委任されたアクセス制御（ユーザーの権限をエージェントに委任） │
-  └─────────────────────────────────────────────────────────────────┘
-  
-  ┌─────────────────────────────────────────────────────────────────┐
-  │ AgentCore Observability & Evaluations                             │
-  │  • エージェントの全行動をトレース                               │
-  │  • 13種類のビルトインエバリュエーターで品質評価                 │
-  │  • ライブインタラクションのサンプリングとスコア付け             │
+  │ エージェントループ（今回実装したもの）                           │
+  │                                                                 │
+  │  ユーザー入力 → モデル推論 → ツール選択 → ツール実行            │
+  │                     ↑                         │                 │
+  │                     └─────── 結果を返す ──────┘                 │
+  │                                                                 │
+  │  stopReason == "tool_use" → ループ継続                          │
+  │  stopReason == "end_turn" → 最終回答を出力                      │
   └─────────────────────────────────────────────────────────────────┘
 
-  プロトタイプ→本番の移行:
-  1. ローカルで Strands Agents を使って開発・テスト
-  2. AgentCore Runtime にデプロイ（フレームワーク非依存）
-  3. Gateway でツールを登録・管理
-  4. Identity/Policy でセキュリティを設定
-  5. Observability で本番モニタリング
+  AgentCore はこのパターンを本番で運用するためのコンポーネント群:
+
+  • Gateway:  ツールの登録・検索・ルーティング
+  • Memory:   会話コンテキストの永続化
+  • Identity: エージェントの認証・認可
+  • Runtime:  サーバーレス実行・オートスケーリング
+  • Observability: トレーシング・品質評価
 """)
 
 
