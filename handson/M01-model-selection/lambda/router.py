@@ -188,20 +188,39 @@ def select_model(complexity, budget_exceeded=False):
     return model_map.get(complexity, (FALLBACK_MODEL, "default"))
 
 
+def extract_provider(model_id):
+    """モデルIDからプロバイダー名を抽出する
+    例: 'us.anthropic.claude-...' → 'anthropic'
+        'amazon.nova-pro-v1:0' → 'amazon'
+        'meta.llama3-...' → 'meta'
+    """
+    parts = model_id.split('.')
+    # cross-region inference profile (us.anthropic.xxx) の場合は2番目
+    if len(parts) >= 3 and parts[0] in ('us', 'eu', 'ap'):
+        return parts[1]
+    return parts[0]
+
+
 def invoke_model_with_fallback(model_id, query):
     """
     モデルを呼び出し、失敗時はフォールバックする
     """
-    provider = model_id.split('.')[0]  # anthropic, amazon, meta
+    provider = extract_provider(model_id)
 
     # 障害シミュレーションのチェック（SSM Parameter Store から取得）
     failure_type = get_simulated_failure(provider)
     if failure_type:
+        logger.warning(f"Simulated {failure_type} for {provider}, falling back")
         if failure_type == "timeout":
-            time.sleep(10)
-            raise TimeoutError(f"Simulated timeout for {provider}")
+            publish_metrics(provider, model_id, 0, None, success=False)
+            cb = get_circuit_breaker(provider)
+            cb.record_failure()
+            return invoke_fallback(query, f"simulated_timeout_{provider}")
         elif failure_type == "error":
-            raise Exception(f"Simulated error for {provider}")
+            publish_metrics(provider, model_id, 0, None, success=False)
+            cb = get_circuit_breaker(provider)
+            cb.record_failure()
+            return invoke_fallback(query, f"simulated_error_{provider}")
 
     # サーキットブレーカーのチェック
     cb = get_circuit_breaker(provider)
@@ -257,7 +276,7 @@ def invoke_fallback(query, reason):
     fallback_models = [FALLBACK_MODEL, BUDGET_MODEL]
 
     for fallback in fallback_models:
-        provider = fallback.split('.')[0]
+        provider = extract_provider(fallback)
         fb_cb = get_circuit_breaker(provider)
 
         if not fb_cb.can_execute():
