@@ -124,7 +124,7 @@ def create_vector_bucket():
         response = s3vectors.create_vector_bucket(
             vectorBucketName=VECTOR_BUCKET_NAME
         )
-        vector_bucket_arn = response['vectorBucket']['vectorBucketArn']
+        vector_bucket_arn = response['vectorBucketArn']
         print(f"  ✅ ベクトルバケット作成: {vector_bucket_arn}")
         return vector_bucket_arn
 
@@ -163,7 +163,7 @@ def create_vector_index(vector_bucket_arn):
                 ]
             }
         )
-        index_arn = response['index']['indexArn']
+        index_arn = response['indexArn']
         print(f"  ✅ ベクトルインデックス作成: {index_arn}")
         return index_arn
 
