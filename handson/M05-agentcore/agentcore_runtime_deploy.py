@@ -22,6 +22,7 @@ bedrock-agentcore-starter-toolkit を使って Strands Agents で作った
 
 import sys
 import os
+import json
 import boto3
 
 # ======================================================================
@@ -168,8 +169,31 @@ def setup_files():
     print("\n  [1] エージェントファイルの準備")
     print("  " + "-" * 55)
 
+    # 前ステップで作成した Gateway / Memory を検出
+    gateway_url = get_gateway_url()
+    memory_id = get_memory_id()
+
+    if gateway_url:
+        print(f"    Gateway URL: {gateway_url}")
+    else:
+        print(f"    ⚠ Gateway 未検出 → ローカルツールで動作します")
+
+    if memory_id:
+        print(f"    Memory ID:   {memory_id}")
+    else:
+        print(f"    ⚠ Memory 未検出 → メモリなしで動作します")
+
+    # 環境変数をエージェントコードに埋め込み
+    agent_code = AGENT_CODE.replace(
+        'GATEWAY_URL = os.environ.get("AGENTCORE_GATEWAY_URL", "")',
+        f'GATEWAY_URL = os.environ.get("AGENTCORE_GATEWAY_URL", "{gateway_url}")',
+    ).replace(
+        'MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID", "")',
+        f'MEMORY_ID = os.environ.get("AGENTCORE_MEMORY_ID", "{memory_id}")',
+    )
+
     with open(AGENT_FILE, "w") as f:
-        f.write(AGENT_CODE)
+        f.write(agent_code)
     print(f"    ✓ {AGENT_FILE} を生成")
 
     with open(REQUIREMENTS_FILE, "w") as f:
@@ -178,8 +202,8 @@ def setup_files():
 
     print(f"\n    エージェント構成:")
     print(f"      モデル: us.amazon.nova-pro-v1:0")
-    print(f"      Gateway: 環境変数 AGENTCORE_GATEWAY_URL で指定")
-    print(f"      Memory:  環境変数 AGENTCORE_MEMORY_ID で指定")
+    print(f"      Gateway: {'統合済み' if gateway_url else 'なし（ローカルツール）'}")
+    print(f"      Memory:  {'統合済み' if memory_id else 'なし'}")
     print(f"      フレームワーク: Strands Agents + MCPClient")
 
 
@@ -211,64 +235,38 @@ def get_memory_id():
 
 
 def deploy():
-    """starter-toolkit で AgentCore Runtime にデプロイ"""
+    """starter-toolkit CLI でデプロイ"""
     print("\n  [2] AgentCore Runtime へのデプロイ")
     print("  " + "-" * 55)
 
-    from bedrock_agentcore_starter_toolkit import Runtime
-    from boto3.session import Session
+    import subprocess
 
-    boto_session = Session()
-    region = boto_session.region_name or "us-east-1"
-
-    # 前ステップで作成した Gateway / Memory を検出
-    gateway_url = get_gateway_url()
-    memory_id = get_memory_id()
-
-    if gateway_url:
-        print(f"    Gateway URL: {gateway_url}")
-    else:
-        print(f"    ⚠ Gateway 未検出 → ローカルツールで動作します")
-
-    if memory_id:
-        print(f"    Memory ID:   {memory_id}")
-    else:
-        print(f"    ⚠ Memory 未検出 → メモリなしで動作します")
-
-    runtime = Runtime()
+    region = boto3.session.Session().region_name or "us-east-1"
 
     # Step 1: Configure
     print(f"\n    Configure...")
-    env_vars = {}
-    if gateway_url:
-        env_vars["AGENTCORE_GATEWAY_URL"] = gateway_url
-    if memory_id:
-        env_vars["AGENTCORE_MEMORY_ID"] = memory_id
-
-    config_kwargs = dict(
-        entrypoint=AGENT_FILE,
-        auto_create_execution_role=True,
-        auto_create_ecr=True,
-        requirements_file=REQUIREMENTS_FILE,
-        region=region,
-        agent_name=AGENT_NAME,
+    result = subprocess.run(
+        ["agentcore", "configure", "-e", AGENT_FILE, "-r", region, "--disable-memory"],
+        capture_output=True, text=True,
     )
-    if env_vars:
-        config_kwargs["environment_variables"] = env_vars
-
-    config_response = runtime.configure(**config_kwargs)
+    if result.returncode != 0:
+        print(f"    ⚠ configure エラー: {result.stderr}")
+        raise RuntimeError(result.stderr)
     print(f"    ✓ 設定完了")
-    print(f"      {config_response}")
 
-    # Step 2: Launch (ビルド＆デプロイ)
-    print(f"\n    Launch (ビルド & デプロイ)...")
-    print(f"    ※ Docker イメージのビルドとプッシュが行われます")
+    # Step 2: Deploy
+    print(f"\n    Deploy...")
+    print(f"    ※ CodeBuild でコンテナビルドが行われます")
     print(f"    ※ 数分かかります...")
-    launch_result = runtime.launch()
+    result = subprocess.run(
+        ["agentcore", "deploy"],
+        capture_output=True, text=True, timeout=600,
+    )
+    if result.returncode != 0:
+        print(f"    ⚠ deploy エラー: {result.stderr}")
+        raise RuntimeError(result.stderr)
     print(f"    ✓ デプロイ完了!")
-    print(f"      Agent ARN: {launch_result.get('agent_arn', 'N/A')}")
-
-    return runtime
+    print(f"    {result.stdout[-200:] if result.stdout else ''}")
 
 
 def invoke_agent(prompt):
@@ -276,22 +274,23 @@ def invoke_agent(prompt):
     print("\n  [3] エージェントの呼び出し")
     print("  " + "-" * 55)
 
-    from bedrock_agentcore_starter_toolkit import Runtime
-    import uuid
+    import subprocess
 
-    runtime = Runtime()
+    payload = json.dumps({"prompt": prompt, "actor_id": "demo-user-001"})
     print(f"    プロンプト: {prompt}")
     print(f"    呼び出し中...")
 
-    response = runtime.invoke({
-        "prompt": prompt,
-        "actor_id": "demo-user-001",
-        "session_id": str(uuid.uuid4())[:8],
-    })
-    print(f"\n    エージェント応答:")
-    print(f"    {response}")
+    result = subprocess.run(
+        ["agentcore", "invoke", payload],
+        capture_output=True, text=True, timeout=120,
+    )
+    if result.returncode != 0:
+        print(f"    ⚠ invoke エラー: {result.stderr}")
+        return
 
-    return response
+    print(f"\n    エージェント応答:")
+    print(f"    {result.stdout}")
+    return result.stdout
 
 
 def cleanup_files():
@@ -332,17 +331,12 @@ def main():
     # 2. デプロイ
     try:
         deploy()
-    except ImportError:
-        print(f"\n    ⚠ bedrock-agentcore-starter-toolkit が未インストールです")
+    except FileNotFoundError:
+        print(f"\n    ⚠ agentcore CLI が未インストールです")
         print(f"    以下を実行してください:")
         print(f"      pip install bedrock-agentcore-starter-toolkit")
-        print(f"\n    手動デプロイ手順:")
-        print(f"      1. pip install bedrock-agentcore strands-agents")
-        print(f"      2. pip install bedrock-agentcore-starter-toolkit")
-        print(f"      3. python3.12 agentcore_runtime_deploy.py")
     except Exception as e:
         print(f"\n    ⚠ デプロイエラー: {e}")
-        print(f"    Docker が起動中か確認してください。")
 
     print(f"""
   {'=' * 65}
