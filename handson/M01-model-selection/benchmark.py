@@ -13,14 +13,14 @@ client = boto3.client('bedrock-runtime', region_name='us-east-1')
 
 # 評価対象モデル
 MODELS = {
-    "Claude 3.5 Sonnet": {
-        "model_id": "anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "Claude Sonnet 4": {
+        "model_id": "anthropic.claude-sonnet-4-20250514-v1:0",
         "input_cost_per_1k": 0.003,
         "output_cost_per_1k": 0.015,
         "category": "premium"
     },
-    "Claude 3 Haiku": {
-        "model_id": "anthropic.claude-3-haiku-20240307-v1:0",
+    "Claude Haiku 4": {
+        "model_id": "anthropic.claude-haiku-4-20250514-v1:0",
         "input_cost_per_1k": 0.00025,
         "output_cost_per_1k": 0.00125,
         "category": "budget"
@@ -211,10 +211,10 @@ def run_benchmark():
     
     print("\n" + "=" * 80)
     print("  推奨アーキテクチャ:")
-    print("  • プライマリ (複雑な分析): Claude 3.5 Sonnet")
+    print("  • プライマリ (複雑な分析): Claude Sonnet 4")
     print("  • セカンダリ (一般タスク): Amazon Nova Pro")
     print("  • バジェット (大量処理): Amazon Nova Lite")
-    print("  • フォールバック: Claude 3 Haiku")
+    print("  • フォールバック: Claude Haiku 4")
     print("=" * 80)
 
 

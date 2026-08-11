@@ -43,7 +43,7 @@
 - Amazon Bedrock モデルアクセス有効化済み
   - Amazon Nova Lite / Pro
   - Amazon Titan Embeddings V2
-  - Anthropic Claude 3.5 Sonnet / Haiku
+  - Anthropic Claude Sonnet 4 / Haiku
   - Meta Llama 3
 
 ### リージョン
