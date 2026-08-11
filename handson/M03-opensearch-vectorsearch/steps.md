@@ -196,7 +196,7 @@ score = (knn_score * 0.6) + (bm25_score * 0.2) + (recency_score * 0.1) + (popula
 ### ステップ 4.3: フィルタリングとの組み合わせ
 
 ```bash
-python3.12 custom_scoring.py --query "知的財産権" --filter-category "architecture"
+python3.12 custom_scoring.py --query "知的財産権" --filter-category "contract"
 ```
 
 メタデータフィルタリング + カスタムスコアリングの組み合わせ：
