@@ -1,470 +1,599 @@
 """
-モジュール 4: プロンプトフローとオーケストレーション デモ
-- マルチステップワークフローの構築
-- 条件付きルーティング（意図分類→専門ペルソナへ転送）
-- 動的プロンプト選択（言語検出、複雑度判定）
-- A/B テストフレームワーク
+モジュール 4: インタラクティブ カスタマーサポート ワークフロー デモ
+
+スライドの「インタラクティブデモンストレーション」に対応:
+1. 受信リクエストを分析する（意図分類・感情分析）
+2. 適切な専門家にルーティングする（条件付きロジック）
+3. CRM データと統合する（顧客情報参照）
+4. 構造化された応答を提供する（テンプレート応答生成）
+5. 品質保証のためにインタラクションをログに記録する（品質スコア・ログ）
+
+連続チェーン、条件付きロジック、外部データ統合、A/Bテストを含む
+エンタープライズグレードのカスタマーサポート AI ワークフローを構築します。
 """
 
 import boto3
 import json
 import time
+from datetime import datetime
 
 bedrock = boto3.client('bedrock-runtime', region_name='us-east-1')
 MODEL_ID = "amazon.nova-pro-v1:0"
 
 
 # ============================================================
-# プロンプトフロー: ノード定義
+# シミュレート CRM データベース（外部データ統合のデモ）
 # ============================================================
 
-FLOW_NODES = {
-    "classify": {
-        "name": "意図分類ノード",
-        "prompt": """以下のカスタマーサポート問い合わせを分類してください。
+CRM_DATABASE = {
+    "C-1001": {
+        "name": "田中 太郎",
+        "tier": "Premium",
+        "account_since": "2021-03-15",
+        "monthly_spend": 15000,
+        "open_tickets": 1,
+        "last_interaction": "2026-07-28",
+        "products": ["エンタープライズプラン", "API アドオン", "優先サポート"],
+        "satisfaction_score": 4.2
+    },
+    "C-1002": {
+        "name": "佐藤 花子",
+        "tier": "Standard",
+        "account_since": "2023-08-01",
+        "monthly_spend": 5000,
+        "open_tickets": 0,
+        "last_interaction": "2026-08-05",
+        "products": ["スタンダードプラン"],
+        "satisfaction_score": 3.8
+    },
+    "C-1003": {
+        "name": "鈴木 一郎",
+        "tier": "Enterprise",
+        "account_since": "2020-01-10",
+        "monthly_spend": 80000,
+        "open_tickets": 3,
+        "last_interaction": "2026-08-10",
+        "products": ["エンタープライズプラン", "専用インスタンス", "SLA 99.99%", "専任AM"],
+        "satisfaction_score": 3.5
+    }
+}
 
-カテゴリ（1つ選択）:
-- billing: 請求・支払い関連
-- technical: 技術的な問題
-- account: アカウント管理
-- general: 一般的な質問
 
-緊急度:
-- high: 即時対応が必要（金銭被害、サービス停止）
-- medium: 早めの対応が望ましい
-- low: 通常対応で可
+# ============================================================
+# 品質ログ（インタラクション記録）
+# ============================================================
+
+interaction_log = []
+
+
+def log_interaction(step, data):
+    """品質保証用のインタラクションログを記録"""
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "step": step,
+        "data": data
+    }
+    interaction_log.append(entry)
+    return entry
+
+
+# ============================================================
+# ステップ 1: 受信リクエストの分析
+# ============================================================
+
+def analyze_request(query, customer_id):
+    """受信リクエストの意図分類と感情分析を実行"""
+
+    analysis_prompt = f"""以下のカスタマーサポートの問い合わせを分析してください。
 
 問い合わせ: {query}
 
-以下のJSON形式のみで回答してください:
-{{"category": "...", "urgency": "...", "summary": "..."}}"""
-    },
+以下のJSON形式のみで回答してください（説明不要）:
+{{
+  "category": "billing/technical/account/product/escalation",
+  "urgency": "critical/high/medium/low",
+  "sentiment": "positive/neutral/frustrated/angry",
+  "complexity": "simple/moderate/complex",
+  "key_entities": ["関連するキーワードを最大3つ"],
+  "summary": "問い合わせの要約（1文）"
+}}"""
+
+    response = bedrock.converse(
+        modelId=MODEL_ID,
+        messages=[{"role": "user", "content": [{"text": analysis_prompt}]}],
+        inferenceConfig={"temperature": 0, "maxTokens": 300}
+    )
+
+    raw_text = response['output']['message']['content'][0]['text']
+
+    # JSONパース
+    try:
+        import re
+        json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+        if json_match:
+            analysis = json.loads(json_match.group())
+        else:
+            analysis = json.loads(raw_text)
+    except json.JSONDecodeError:
+        analysis = {
+            "category": "general",
+            "urgency": "medium",
+            "sentiment": "neutral",
+            "complexity": "moderate",
+            "key_entities": [],
+            "summary": query[:50]
+        }
+
+    # ログ記録
+    log_interaction("request_analysis", {
+        "customer_id": customer_id,
+        "query": query,
+        "analysis": analysis
+    })
+
+    return analysis
+
+
+# ============================================================
+# ステップ 2: 適切な専門家にルーティング
+# ============================================================
+
+EXPERT_ROUTING = {
     "billing": {
-        "name": "請求サポート ペルソナ",
-        "system_prompt": """あなたは請求・会計サポートの専門家です。
+        "team": "請求・会計チーム",
+        "sla_minutes": 30,
+        "system_prompt": """あなたは請求・会計サポートの上級スペシャリストです。
 
-対応方針:
-- 金銭に関わる問題は最優先で対応
-- 具体的な調査手順と解決までの目安を提示
-- 返金が必要な場合はプロセスを明確に説明
-- 常に共感を示し、不安を軽減する
+対応ガイドライン:
+- 金銭に関わる問題は正確性を最優先
+- 具体的な金額や日付を含めて回答
+- 返金・調整が必要な場合はプロセスと期間を明示
+- 共感を示しつつ、事実に基づいた説明を行う
 
-応答形式:
+応答構造:
 1. 状況の確認と共感
-2. 調査・対応手順の説明
-3. 解決までの目安
-4. 追加サポートの案内"""
+2. 原因の説明（わかる場合）
+3. 解決策と手順
+4. 対応完了までの目安"""
     },
     "technical": {
-        "name": "テクニカルサポート ペルソナ",
+        "team": "テクニカルサポートチーム",
+        "sla_minutes": 60,
         "system_prompt": """あなたは上級テクニカルサポートエンジニアです。
 
-対応方針:
-- 技術的な問題を体系的にトラブルシュート
+対応ガイドライン:
+- 問題を体系的にトラブルシュート
 - ステップバイステップの解決手順を提示
-- 必要に応じてエスカレーション基準を説明
-- 回避策がある場合は先に提示
+- 回避策がある場合は先に提示してから根本対策を説明
+- 技術的な詳細は顧客のレベルに合わせて調整
 
-応答形式:
+応答構造:
 1. 問題の切り分け
 2. 推定原因
 3. 解決手順（番号付き）
 4. 改善しない場合の次のステップ"""
     },
     "account": {
-        "name": "アカウント管理 ペルソナ",
+        "team": "アカウント管理チーム",
+        "sla_minutes": 45,
         "system_prompt": """あなたはアカウント管理の専門スタッフです。
 
-対応方針:
+対応ガイドライン:
 - セキュリティを最優先に考慮
-- 本人確認の手順を明確に案内
-- アカウント変更は慎重に、確認ステップを設ける
-- プライバシーに配慮した説明
+- アカウント変更は確認ステップを設ける
+- プラン変更は現在の利用状況と比較して提案
+- アップグレード機会は押し付けず情報提供として
 
-応答形式:
-1. セキュリティ確認事項
-2. 対応可能な操作の説明
-3. 必要な手続きの案内
-4. 注意事項"""
+応答構造:
+1. 本人確認の案内（必要な場合）
+2. リクエスト内容の確認
+3. 対応手順の説明
+4. 変更による影響の説明"""
     },
-    "general": {
-        "name": "一般サポート ペルソナ",
-        "system_prompt": """あなたは親切で知識豊富なカスタマーサポート担当です。
+    "product": {
+        "team": "プロダクトスペシャリストチーム",
+        "sla_minutes": 120,
+        "system_prompt": """あなたはプロダクトの専門アドバイザーです。
 
-対応方針:
-- わかりやすく丁寧に説明
-- 関連情報やリソースへのリンクを案内
-- FAQ に該当する場合は簡潔に回答
-- 専門チームへの転送が必要な場合は案内
+対応ガイドライン:
+- 製品の機能と制限を正確に説明
+- ユースケースに基づいた具体的な提案
+- ドキュメントやリソースへの参照を含める
+- 機能リクエストは記録して開発チームへ転送
 
-応答形式:
-1. 質問への直接的な回答
-2. 補足情報
-3. 関連するヘルプリソース"""
+応答構造:
+1. 質問内容の理解確認
+2. 回答（具体例付き）
+3. 関連する機能やベストプラクティス
+4. 追加リソースの案内"""
     },
-    "validate": {
-        "name": "出力検証ノード",
-        "prompt": """以下のカスタマーサポート応答の品質を検証してください。
+    "escalation": {
+        "team": "エスカレーションマネージャー",
+        "sla_minutes": 15,
+        "system_prompt": """あなたはエスカレーション対応の上級マネージャーです。
 
-元の問い合わせ: {query}
-生成された応答: {response}
+対応ガイドライン:
+- 即座に状況を把握し、最優先で対応
+- 顧客の感情に十分配慮
+- 具体的な補償や改善策を提示する権限あり
+- 必要に応じて上位の意思決定者への連携を約束
 
-検証項目:
-1. 共感・礼儀: 適切な共感表現が含まれているか
-2. 正確性: 問い合わせに対して的確に回答しているか
-3. 完全性: 必要な情報が網羅されているか
-4. 次のアクション: 明確な次のステップが示されているか
-5. 不適切表現: 不適切な表現や約束がないか
-
-以下のJSON形式のみで回答:
-{{"empathy": true/false, "accuracy": true/false, "completeness": true/false, "next_action": true/false, "appropriate": true/false, "overall_score": 1-10, "feedback": "..."}}"""
+応答構造:
+1. 即時の謝罪と状況理解の表明
+2. これまでの経緯の確認
+3. 即座に取れるアクション
+4. 再発防止策と今後のフォロー"""
     }
 }
 
 
-def invoke_model(prompt, system_prompt=None, temperature=0.2, max_tokens=600):
-    """モデル呼び出しのユーティリティ"""
-    kwargs = {
-        "modelId": MODEL_ID,
-        "messages": [{"role": "user", "content": [{"text": prompt}]}],
-        "inferenceConfig": {"temperature": temperature, "maxTokens": max_tokens}
+def route_to_expert(analysis, customer_data):
+    """分析結果と顧客情報に基づいて適切な専門家チームにルーティング"""
+
+    category = analysis.get("category", "product")
+    urgency = analysis.get("urgency", "medium")
+    sentiment = analysis.get("sentiment", "neutral")
+    tier = customer_data.get("tier", "Standard")
+
+    # エスカレーション判定ロジック
+    should_escalate = False
+    escalation_reason = ""
+
+    if urgency == "critical":
+        should_escalate = True
+        escalation_reason = "緊急度: critical"
+    elif sentiment in ("angry", "frustrated") and tier == "Enterprise":
+        should_escalate = True
+        escalation_reason = f"Enterprise顧客の不満 (sentiment: {sentiment})"
+    elif customer_data.get("open_tickets", 0) >= 3:
+        should_escalate = True
+        escalation_reason = f"未解決チケット多数 ({customer_data['open_tickets']}件)"
+
+    if should_escalate:
+        routing = EXPERT_ROUTING["escalation"]
+        final_category = "escalation"
+    else:
+        # カテゴリが定義にない場合はproductにフォールバック
+        if category not in EXPERT_ROUTING:
+            category = "product"
+        routing = EXPERT_ROUTING[category]
+        final_category = category
+
+    # SLA 調整（Premium/Enterprise は短縮）
+    sla = routing["sla_minutes"]
+    if tier == "Premium":
+        sla = int(sla * 0.7)
+    elif tier == "Enterprise":
+        sla = int(sla * 0.5)
+
+    routing_result = {
+        "team": routing["team"],
+        "category": final_category,
+        "sla_minutes": sla,
+        "escalated": should_escalate,
+        "escalation_reason": escalation_reason if should_escalate else None,
+        "priority_boost": tier in ("Premium", "Enterprise")
     }
-    if system_prompt:
-        kwargs["system"] = [{"text": system_prompt}]
 
-    response = bedrock.converse(**kwargs)
-    return response['output']['message']['content'][0]['text']
+    # ログ記録
+    log_interaction("routing", routing_result)
 
-
-# ============================================================
-# デモ 1: マルチステップ プロンプトフロー
-# ============================================================
-
-def demo_prompt_flow():
-    """カスタマーサポート プロンプトフローのデモ"""
-    print("=" * 70)
-    print("  デモ 1: プロンプトフロー - マルチステップオーケストレーション")
-    print("=" * 70)
-
-    queries = [
-        "先月の請求書が二重に引き落とされているようです。確認と返金をお願いします。",
-        "ログインしようとするとエラーコード503が表示されて利用できません。",
-        "契約プランのアップグレード方法を教えてください。"
-    ]
-
-    for i, query in enumerate(queries, 1):
-        print(f"\n{'━' * 70}")
-        print(f"  テストケース {i}: {query}")
-        print(f"{'━' * 70}")
-
-        # ステップ 1: 意図分類
-        print("\n  ┌─ [ノード1: 意図分類]")
-        try:
-            classify_prompt = FLOW_NODES["classify"]["prompt"].format(query=query)
-            classification_raw = invoke_model(classify_prompt, temperature=0)
-            print(f"  │  結果: {classification_raw.strip()}")
-
-            # JSONパース試行
-            try:
-                classification = json.loads(classification_raw.strip())
-            except json.JSONDecodeError:
-                # JSON抽出を試みる
-                import re
-                json_match = re.search(r'\{.*\}', classification_raw, re.DOTALL)
-                if json_match:
-                    classification = json.loads(json_match.group())
-                else:
-                    classification = {"category": "general", "urgency": "medium", "summary": query[:30]}
-        except Exception as e:
-            print(f"  │  エラー: {e}")
-            classification = {"category": "general", "urgency": "medium", "summary": query[:30]}
-
-        category = classification.get("category", "general")
-        urgency = classification.get("urgency", "medium")
-
-        # ステップ 2: ルーティング
-        print(f"  │")
-        print(f"  ├─ [ノード2: ルーティング]")
-        print(f"  │  → カテゴリ: {category}")
-        print(f"  │  → 緊急度: {urgency}")
-        if urgency == "high":
-            print(f"  │  → ⚠️  優先対応フラグ設定")
-
-        # ステップ 3: 専門ペルソナによる応答生成
-        print(f"  │")
-        print(f"  ├─ [ノード3: 応答生成 ({FLOW_NODES[category]['name']})]")
-        try:
-            system = FLOW_NODES[category]["system_prompt"]
-            response_text = invoke_model(query, system_prompt=system, temperature=0.3)
-            # 表示を整形
-            for line in response_text.split('\n')[:8]:
-                print(f"  │  {line}")
-            if len(response_text.split('\n')) > 8:
-                print(f"  │  ...")
-        except Exception as e:
-            response_text = f"申し訳ございません。現在対応準備中です。"
-            print(f"  │  エラー: {e}")
-
-        # ステップ 4: 出力検証
-        print(f"  │")
-        print(f"  ├─ [ノード4: 出力検証]")
-        try:
-            validate_prompt = FLOW_NODES["validate"]["prompt"].format(
-                query=query, response=response_text[:500]
-            )
-            validation_raw = invoke_model(validate_prompt, temperature=0, max_tokens=300)
-            try:
-                validation = json.loads(validation_raw.strip())
-            except json.JSONDecodeError:
-                import re
-                json_match = re.search(r'\{.*\}', validation_raw, re.DOTALL)
-                if json_match:
-                    validation = json.loads(json_match.group())
-                else:
-                    validation = {"overall_score": 7, "feedback": "検証完了"}
-
-            score = validation.get("overall_score", "N/A")
-            print(f"  │  品質スコア: {score}/10")
-            print(f"  │  共感表現: {'✅' if validation.get('empathy') else '❌'}")
-            print(f"  │  正確性:   {'✅' if validation.get('accuracy') else '❌'}")
-            print(f"  │  完全性:   {'✅' if validation.get('completeness') else '❌'}")
-            print(f"  │  次の行動: {'✅' if validation.get('next_action') else '❌'}")
-        except Exception as e:
-            print(f"  │  検証エラー: {e}")
-
-        print(f"  │")
-        print(f"  └─ フロー完了 ✅")
-
-        if i < len(queries):
-            time.sleep(1)
+    return routing_result, routing["system_prompt"]
 
 
 # ============================================================
-# デモ 2: 動的プロンプト選択（条件付きロジック）
+# ステップ 3: CRM データと統合
 # ============================================================
 
-def demo_conditional_routing():
-    """条件付きルーティングのデモ"""
-    print("\n\n" + "=" * 70)
-    print("  デモ 2: 動的プロンプト選択（条件付きロジック）")
-    print("=" * 70)
+def lookup_crm(customer_id):
+    """CRM からの顧客データ取得（シミュレーション）"""
+    customer = CRM_DATABASE.get(customer_id, {
+        "name": "不明な顧客",
+        "tier": "Standard",
+        "account_since": "N/A",
+        "monthly_spend": 0,
+        "open_tickets": 0,
+        "products": [],
+        "satisfaction_score": 0
+    })
 
-    # 言語検出 → 適切な言語で応答
-    test_queries = [
-        ("日本語", "製品の返品ポリシーを教えてください。"),
-        ("English", "What is your return policy?"),
-        ("混合", "AWSのLambdaについて教えてください。Cold startの対策は？"),
-    ]
+    # ログ記録
+    log_interaction("crm_lookup", {
+        "customer_id": customer_id,
+        "tier": customer.get("tier"),
+        "products": customer.get("products", [])
+    })
 
-    print(f"\n{'─' * 70}")
-    print("  条件 1: 言語検出による応答言語の自動切り替え")
-    print(f"{'─' * 70}")
+    return customer
 
-    language_detect_prompt = """以下のテキストの主要言語を判定してください。
-テキスト: {text}
 
-以下のJSON形式のみで回答:
-{{"language": "ja" or "en", "confidence": 0.0-1.0}}"""
+def build_context_with_crm(query, customer_data, analysis):
+    """CRM データをプロンプトコンテキストに統合"""
+    context = f"""【顧客情報（CRM）】
+- 顧客名: {customer_data['name']}
+- 顧客ティア: {customer_data['tier']}
+- 利用開始: {customer_data['account_since']}
+- 月額利用額: ¥{customer_data['monthly_spend']:,}
+- 契約製品: {', '.join(customer_data['products'])}
+- 未解決チケット: {customer_data['open_tickets']}件
+- 顧客満足度: {customer_data['satisfaction_score']}/5.0
 
-    for label, query in test_queries:
-        print(f"\n  入力 ({label}): {query}")
-        try:
-            detect_prompt = language_detect_prompt.format(text=query)
-            result = invoke_model(detect_prompt, temperature=0, max_tokens=100)
-            print(f"  検出結果: {result.strip()}")
-        except Exception as e:
-            print(f"  エラー: {e}")
+【問い合わせ分析】
+- カテゴリ: {analysis['category']}
+- 緊急度: {analysis['urgency']}
+- 顧客感情: {analysis['sentiment']}
+- 複雑度: {analysis['complexity']}
 
-    # 複雑度判定 → 簡易回答 or 詳細分析
-    print(f"\n{'─' * 70}")
-    print("  条件 2: クエリ複雑度による応答深度の自動調整")
-    print(f"{'─' * 70}")
+【お客様の問い合わせ】
+{query}
 
-    complexity_queries = [
-        ("簡単", "営業時間は何時までですか？"),
-        ("中程度", "プランAとプランBの違いを比較して、どちらが中小企業に向いているか教えてください。"),
-        ("複雑", "マイクロサービスアーキテクチャへの移行を検討中です。現在のモノリシック構成からの段階的移行計画、リスク評価、必要なチーム体制、推定コストを含む提案をお願いします。"),
-    ]
+上記の顧客情報と分析結果を踏まえて、このお客様に最適な回答を生成してください。
+顧客ティアに応じた対応レベル（Enterprise/Premiumは特に丁寧に）で回答してください。"""
 
-    complexity_prompt = """以下の問い合わせの複雑度を判定してください。
-
-問い合わせ: {query}
-
-判定基準:
-- simple: 単一の事実確認、FAQ的な質問
-- moderate: 比較や選択を含む質問
-- complex: 多面的な分析や専門知識が必要な質問
-
-以下のJSON形式のみで回答:
-{{"complexity": "simple/moderate/complex", "reasoning": "...", "recommended_depth": "1-2文/3-5段落/詳細レポート"}}"""
-
-    for label, query in complexity_queries:
-        print(f"\n  入力 ({label}): {query[:50]}...")
-        try:
-            prompt = complexity_prompt.format(query=query)
-            result = invoke_model(prompt, temperature=0, max_tokens=200)
-            print(f"  判定: {result.strip()}")
-        except Exception as e:
-            print(f"  エラー: {e}")
+    return context
 
 
 # ============================================================
-# デモ 3: A/B テストフレームワーク
+# ステップ 4: 構造化された応答の生成
 # ============================================================
 
-def demo_ab_testing():
-    """プロンプト A/B テストのデモ"""
-    print("\n\n" + "=" * 70)
-    print("  デモ 3: A/B テストフレームワーク")
-    print("=" * 70)
+def generate_structured_response(query, customer_data, analysis, system_prompt):
+    """構造化されたテンプレート応答を生成"""
 
-    # バリアント定義
-    variants = {
-        "A（現行）": {
-            "system": "あなたはカスタマーサポート担当です。お客様の質問に回答してください。",
-            "description": "シンプルなシステムプロンプト"
-        },
-        "B（改善版）": {
-            "system": """あなたは経験豊富なカスタマーサポートの専門家です。
+    context = build_context_with_crm(query, customer_data, analysis)
 
-応答ガイドライン:
-1. まず共感を示す（お客様の状況を理解していることを伝える）
-2. 問題を簡潔に要約する
-3. 解決策をステップバイステップで提示する
-4. 追加の質問がないか確認する
+    response = bedrock.converse(
+        modelId=MODEL_ID,
+        system=[{"text": system_prompt}],
+        messages=[{"role": "user", "content": [{"text": context}]}],
+        inferenceConfig={"temperature": 0.3, "maxTokens": 800}
+    )
 
-トーン: 温かく、プロフェッショナルで、簡潔に
-制約: 200文字以内で回答する""",
-            "description": "構造化されたガイドライン付きプロンプト"
+    response_text = response['output']['message']['content'][0]['text']
+
+    # ログ記録
+    log_interaction("response_generated", {
+        "response_length": len(response_text),
+        "tokens_used": response.get('usage', {})
+    })
+
+    return response_text
+
+
+# ============================================================
+# ステップ 5: 品質保証（品質スコアリングとログ）
+# ============================================================
+
+def quality_check(query, response_text, customer_data):
+    """応答の品質を自動評価"""
+
+    qa_prompt = f"""以下のカスタマーサポート応答の品質を評価してください。
+
+【元の問い合わせ】
+{query}
+
+【顧客ティア】
+{customer_data['tier']}
+
+【生成された応答】
+{response_text}
+
+以下のJSON形式のみで評価してください:
+{{
+  "empathy_score": 1-5,
+  "accuracy_score": 1-5,
+  "completeness_score": 1-5,
+  "tone_appropriate": true/false,
+  "tier_appropriate": true/false,
+  "actionable": true/false,
+  "overall_score": 1-10,
+  "improvement_suggestion": "改善提案（1文）"
+}}"""
+
+    try:
+        response = bedrock.converse(
+            modelId=MODEL_ID,
+            messages=[{"role": "user", "content": [{"text": qa_prompt}]}],
+            inferenceConfig={"temperature": 0, "maxTokens": 300}
+        )
+        raw = response['output']['message']['content'][0]['text']
+
+        import re
+        json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if json_match:
+            quality = json.loads(json_match.group())
+        else:
+            quality = json.loads(raw)
+    except Exception:
+        quality = {
+            "empathy_score": 3,
+            "accuracy_score": 3,
+            "completeness_score": 3,
+            "tone_appropriate": True,
+            "tier_appropriate": True,
+            "actionable": True,
+            "overall_score": 6,
+            "improvement_suggestion": "評価エラー"
         }
+
+    # ログ記録
+    log_interaction("quality_check", quality)
+
+    return quality
+
+
+# ============================================================
+# 統合ワークフロー実行
+# ============================================================
+
+def run_workflow(customer_id, query):
+    """カスタマーサポート ワークフロー全体を実行"""
+    global interaction_log
+    interaction_log = []
+
+    print(f"\n{'━' * 70}")
+    print(f"  📩 受信リクエスト")
+    print(f"{'━' * 70}")
+    print(f"  顧客ID: {customer_id}")
+    print(f"  問い合わせ: {query}")
+
+    # --- ステップ 1: リクエスト分析 ---
+    print(f"\n  ┌─ [Step 1] 受信リクエストの分析")
+    analysis = analyze_request(query, customer_id)
+    print(f"  │  カテゴリ:  {analysis.get('category')}")
+    print(f"  │  緊急度:    {analysis.get('urgency')}")
+    print(f"  │  感情:      {analysis.get('sentiment')}")
+    print(f"  │  複雑度:    {analysis.get('complexity')}")
+    print(f"  │  要約:      {analysis.get('summary', '')}")
+
+    # --- ステップ 2: CRM データ統合 ---
+    print(f"  │")
+    print(f"  ├─ [Step 2] CRM データ統合")
+    customer_data = lookup_crm(customer_id)
+    print(f"  │  顧客名:    {customer_data['name']}")
+    print(f"  │  ティア:    {customer_data['tier']}")
+    print(f"  │  月額:      ¥{customer_data['monthly_spend']:,}")
+    print(f"  │  契約製品:  {', '.join(customer_data['products'][:2])}...")
+
+    # --- ステップ 3: ルーティング ---
+    print(f"  │")
+    print(f"  ├─ [Step 3] 適切な専門家にルーティング")
+    routing, system_prompt = route_to_expert(analysis, customer_data)
+    print(f"  │  転送先:    {routing['team']}")
+    print(f"  │  SLA:       {routing['sla_minutes']}分以内")
+    if routing["escalated"]:
+        print(f"  │  ⚠️  エスカレーション: {routing['escalation_reason']}")
+    if routing["priority_boost"]:
+        print(f"  │  ⭐ 優先対応（{customer_data['tier']}ティア）")
+
+    # --- ステップ 4: 構造化応答の生成 ---
+    print(f"  │")
+    print(f"  ├─ [Step 4] 構造化された応答を生成")
+    response_text = generate_structured_response(
+        query, customer_data, analysis, system_prompt
+    )
+    print(f"  │")
+    for line in response_text.split('\n')[:10]:
+        print(f"  │  {line}")
+    if len(response_text.split('\n')) > 10:
+        print(f"  │  ...")
+
+    # --- ステップ 5: 品質チェックとログ ---
+    print(f"  │")
+    print(f"  ├─ [Step 5] 品質保証チェック")
+    quality = quality_check(query, response_text, customer_data)
+    print(f"  │  品質スコア:     {quality.get('overall_score', 'N/A')}/10")
+    print(f"  │  共感:           {quality.get('empathy_score', 'N/A')}/5")
+    print(f"  │  正確性:         {quality.get('accuracy_score', 'N/A')}/5")
+    print(f"  │  完全性:         {quality.get('completeness_score', 'N/A')}/5")
+    print(f"  │  トーン適切:     {'✅' if quality.get('tone_appropriate') else '❌'}")
+    print(f"  │  ティア対応:     {'✅' if quality.get('tier_appropriate') else '❌'}")
+    print(f"  │  改善提案:       {quality.get('improvement_suggestion', 'なし')}")
+
+    # --- インタラクションログ出力 ---
+    print(f"  │")
+    print(f"  └─ [ログ] インタラクション記録: {len(interaction_log)}エントリ")
+    print(f"     ログID: {interaction_log[0]['timestamp'][:19]}")
+
+    return {
+        "analysis": analysis,
+        "customer": customer_data,
+        "routing": routing,
+        "response": response_text,
+        "quality": quality,
+        "log_entries": len(interaction_log)
     }
 
-    test_query = "注文した商品が届かないのですが、どうすればいいですか？"
-    print(f"\n  テストクエリ: {test_query}")
-    print(f"\n  バリアント比較:")
-
-    results = {}
-    for variant_name, config in variants.items():
-        print(f"\n{'─' * 70}")
-        print(f"  バリアント {variant_name}: {config['description']}")
-        print(f"{'─' * 70}")
-
-        try:
-            start_time = time.time()
-            response = invoke_model(
-                test_query,
-                system_prompt=config["system"],
-                temperature=0.3,
-                max_tokens=400
-            )
-            elapsed = time.time() - start_time
-
-            print(f"\n  応答:\n  {response[:300]}")
-            print(f"\n  メトリクス:")
-            print(f"    レイテンシー: {elapsed:.2f}秒")
-            print(f"    トークン数（概算）: 約{len(response) // 2}トークン")
-
-            results[variant_name] = {
-                "response": response,
-                "latency": elapsed,
-                "tokens": len(response) // 2
-            }
-        except Exception as e:
-            print(f"  エラー: {e}")
-
-        time.sleep(1)
-
-    # A/B テスト結果サマリー
-    if len(results) == 2:
-        print(f"\n{'─' * 70}")
-        print("  A/B テスト結果サマリー")
-        print(f"{'─' * 70}")
-        print("""
-  ┌────────────────┬──────────────────┬──────────────────┐
-  │ メトリクス     │ バリアント A     │ バリアント B     │
-  ├────────────────┼──────────────────┼──────────────────┤""")
-        a = results.get("A（現行）", {})
-        b = results.get("B（改善版）", {})
-        print(f"  │ レイテンシー   │ {a.get('latency', 0):.2f}秒{' ' * (12 - len(f'{a.get(chr(108) + chr(97) + chr(116) + chr(101) + chr(110) + chr(99) + chr(121), 0):.2f}秒'))}│ {b.get('latency', 0):.2f}秒{' ' * (12 - len(f'{b.get(chr(108) + chr(97) + chr(116) + chr(101) + chr(110) + chr(99) + chr(121), 0):.2f}秒'))}│")
-        print(f"  │ トークン数     │ ~{a.get('tokens', 0)}{' ' * (14 - len(str(a.get('tokens', 0))))}│ ~{b.get('tokens', 0)}{' ' * (14 - len(str(b.get('tokens', 0))))}│")
-        print("  └────────────────┴──────────────────┴──────────────────┘")
-
-        print("""
-  A/B テスト運用のポイント:
-  • 統計的有意性を確保するため、十分なサンプル数で実施
-  • 品質スコアはLLM-as-Judge または人間評価で測定
-  • レイテンシーとトークン効率もコスト指標として追跡
-  • 勝者バリアントを段階的にロールアウト（カナリアデプロイ）
-""")
-
 
 # ============================================================
-# デモ 4: Bedrock プロンプトフロー概要
+# デモ実行: 複数シナリオ
 # ============================================================
 
-def demo_bedrock_prompt_flow_overview():
-    """Bedrock プロンプトフローの概要説明"""
-    print("\n\n" + "=" * 70)
-    print("  デモ 4: Bedrock プロンプトフロー（コンソール操作ガイド）")
+def main():
+    print("=" * 70)
+    print("  インタラクティブ カスタマーサポート ワークフロー デモ")
     print("=" * 70)
     print("""
-  Bedrock プロンプトフローは、複数のプロンプトを視覚的に
-  接続してワークフローを構築するマネージドサービスです。
+  このデモでは、エンタープライズグレードの AI カスタマーサポート
+  ワークフローを構築します。各リクエストは以下のパイプラインを通過します:
 
-  ┌────────────────────────────────────────────────────────────────┐
-  │                    プロンプトフロー アーキテクチャ              │
-  │                                                                │
-  │  [Input] ──▶ [分類] ──▶ [条件分岐] ──▶ [処理A] ──▶ [Output]  │
-  │                              │                                  │
-  │                              └──▶ [処理B] ──▶ [検証] ──▶ [Out] │
-  └────────────────────────────────────────────────────────────────┘
+  [受信] → [分析] → [CRM統合] → [ルーティング] → [応答生成] → [品質チェック]
+     │                                                              │
+     └──────────── インタラクションログ記録 ─────────────────────────┘
+""")
 
-  ノードタイプ:
-  ┌──────────────┬──────────────────────────────────────────────┐
-  │ ノード       │ 説明                                         │
-  ├──────────────┼──────────────────────────────────────────────┤
-  │ Input        │ フローへの入力を受け取る                     │
-  │ Prompt       │ LLM にプロンプトを送信し応答を取得           │
-  │ Condition    │ 条件に基づいてフローを分岐                   │
-  │ Lambda       │ カスタムロジックを Lambda で実行             │
-  │ Knowledge    │ ナレッジベースから情報を検索                  │
-  │ S3 Storage   │ S3 からデータを読み書き                      │
-  │ Output       │ フローの最終結果を返却                       │
-  └──────────────┴──────────────────────────────────────────────┘
+    # テストシナリオ
+    scenarios = [
+        {
+            "customer_id": "C-1002",
+            "query": "先月の請求が通常より高いのですが、内訳を確認させてください。APIの利用量が増えた覚えはないのですが。",
+            "description": "Standard顧客 - 請求問い合わせ（通常対応）"
+        },
+        {
+            "customer_id": "C-1001",
+            "query": "API のレスポンスタイムが昨日から3倍に悪化しています。本番環境に影響が出ており早急に対応が必要です。",
+            "description": "Premium顧客 - 技術問題（優先対応）"
+        },
+        {
+            "customer_id": "C-1003",
+            "query": "過去2週間で3回もサービス停止が発生しています。SLA違反ではないですか？契約の見直しも含めて責任者と話がしたい。",
+            "description": "Enterprise顧客 - 複数障害（エスカレーション）"
+        },
+    ]
 
-  コンソールでの作成手順:
-  1. AWS コンソール → Amazon Bedrock → プロンプトフロー
-  2. 「フローを作成」をクリック
-  3. ビジュアルエディタでノードをドラッグ＆ドロップ
-  4. ノード間を接続線でつなぐ
-  5. 各ノードのプロンプトやパラメータを設定
-  6. 「テスト」ボタンでフローを実行確認
-  7. バージョンを作成 → エイリアスに紐づけてデプロイ
+    results = []
 
-  API からの呼び出し:
-  ─────────────────────────────────────────────────────────────
-  bedrock_agent = boto3.client('bedrock-agent-runtime')
-  response = bedrock_agent.invoke_flow(
-      flowIdentifier='FLOW_ID',
-      flowAliasIdentifier='ALIAS_ID',
-      inputs=[{
-          'content': {'document': 'ユーザーの入力テキスト'},
-          'nodeName': 'FlowInputNode',
-          'nodeOutputName': 'document'
-      }]
-  )
-  ─────────────────────────────────────────────────────────────
+    for i, scenario in enumerate(scenarios, 1):
+        print(f"\n{'═' * 70}")
+        print(f"  シナリオ {i}: {scenario['description']}")
+        print(f"{'═' * 70}")
+
+        result = run_workflow(scenario["customer_id"], scenario["query"])
+        results.append(result)
+
+        if i < len(scenarios):
+            time.sleep(2)
+
+    # ----------------------------------------------------------
+    # サマリー
+    # ----------------------------------------------------------
+    print(f"\n\n{'═' * 70}")
+    print("  ワークフロー実行サマリー")
+    print(f"{'═' * 70}")
+    print(f"\n  {'シナリオ':<8} {'カテゴリ':<12} {'ルーティング':<24} {'品質':<6} {'エスカレ'}")
+    print(f"  {'─' * 65}")
+    for i, (sc, r) in enumerate(zip(scenarios, results), 1):
+        cat = r["analysis"].get("category", "?")
+        team = r["routing"]["team"]
+        score = r["quality"].get("overall_score", "?")
+        esc = "⚠️ Yes" if r["routing"]["escalated"] else "No"
+        print(f"  {i:<8} {cat:<12} {team:<24} {score}/10  {esc}")
+
+    print(f"""
+{'═' * 70}
+  アーキテクチャまとめ
+{'═' * 70}
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                  カスタマーサポート AI ワークフロー                  │
+  │                                                                     │
+  │  [受信]──▶[意図分類]──▶[CRM参照]──▶[ルーティング]──▶[応答生成]──▶[品質] │
+  │    │        │             │            │               │          │  │
+  │    │      感情分析       顧客情報      条件分岐       テンプレート  QAスコア │
+  │    │      複雑度判定     契約情報      SLA調整        CRM統合     ログ記録 │
+  │    │                    利用履歴      エスカレ判定                       │
+  │    │                                                              │  │
+  │    └────────────── インタラクションログ（全ステップ記録） ──────────┘  │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  本番運用で追加すべき要素:
+  • Amazon Bedrock Guardrails による入出力フィルタリング
+  • CloudWatch Logs/Metrics による運用監視
+  • DynamoDB によるセッション・チケット管理
+  • Amazon Connect との統合（音声チャネル）
+  • プロンプト管理 API によるバージョン管理と A/B テスト
 """)
 
 
-# ============================================================
-# メイン実行
-# ============================================================
-
 if __name__ == "__main__":
-    demo_prompt_flow()
-    time.sleep(1)
-    demo_conditional_routing()
-    time.sleep(1)
-    demo_ab_testing()
-    demo_bedrock_prompt_flow_overview()
+    main()
