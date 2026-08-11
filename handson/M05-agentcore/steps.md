@@ -64,6 +64,16 @@ Converse API の `toolUse` による自律的ツール選択：
 
 ### ステップ 2.1: AgentCore Gateway - ツール管理とルーティング
 
+まず Gateway ターゲット用の Lambda 関数をデプロイ：
+```bash
+aws cloudformation deploy \
+  --template-file lambda-cfn.yaml \
+  --stack-name agentcore-travel-tools \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+Gateway デモの実行：
 ```bash
 python3.12 agentcore_gateway_demo.py
 ```
@@ -232,6 +242,9 @@ python3.12 agentcore_gateway_demo.py --cleanup
 python3.12 agentcore_memory_demo.py --cleanup
 python3.12 agentcore_identity_demo.py --cleanup
 python3.12 agentcore_runtime_deploy.py --cleanup
+
+# Lambda 関数の削除
+aws cloudformation delete-stack --stack-name agentcore-travel-tools --region us-east-1
 ```
 
 ---

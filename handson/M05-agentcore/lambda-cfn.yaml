@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AgentCore Gateway デモ用 Lambda 関数 (travel-tools)
+  Gateway Target として登録し、フライト検索・ホテル検索・天気予報ツールを提供する。
+
+Resources:
+  # ==========================================================================
+  # IAM Role for Lambda
+  # ==========================================================================
+  TravelToolsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: travel-tools-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # ==========================================================================
+  # Lambda Function
+  # ==========================================================================
+  TravelToolsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: travel-tools
+      Description: AgentCore Gateway デモ用 - フライト検索、ホテル検索、天気予報
+      Runtime: python3.12
+      Handler: travel_tools.lambda_handler
+      Timeout: 30
+      MemorySize: 128
+      Role: !GetAtt TravelToolsLambdaRole.Arn
+      Code:
+        ZipFile: |
+          """AgentCore Gateway 用 Lambda: travel-tools"""
+          import json
+          import random
+
+          def lambda_handler(event, context):
+              delimiter = "___"
+              original_tool_name = context.client_context.custom.get(
+                  "bedrockAgentCoreToolName", ""
+              )
+              if delimiter in original_tool_name:
+                  tool_name = original_tool_name[original_tool_name.index(delimiter) + len(delimiter):]
+              else:
+                  tool_name = original_tool_name
+
+              if tool_name == "search_flights":
+                  return search_flights(event)
+              elif tool_name == "search_hotels":
+                  return search_hotels(event)
+              elif tool_name == "get_weather":
+                  return get_weather(event)
+              else:
+                  return {"error": f"Unknown tool: {tool_name}"}
+
+          def search_flights(params):
+              origin = params.get("origin", "東京")
+              destination = params.get("destination", "沖縄")
+              date = params.get("date", "2025-03-15")
+              flights = [
+                  {"airline": "ANA", "departure": "08:00", "arrival": "10:30", "price": 35000, "class": "普通席"},
+                  {"airline": "JAL", "departure": "10:30", "arrival": "13:00", "price": 38000, "class": "普通席"},
+                  {"airline": "Peach", "departure": "06:30", "arrival": "09:15", "price": 15000, "class": "LCC"},
+                  {"airline": "ANA", "departure": "14:00", "arrival": "16:30", "price": 55000, "class": "プレミアムクラス"},
+              ]
+              return {"origin": origin, "destination": destination, "date": date, "flights": flights}
+
+          def search_hotels(params):
+              city = params.get("city", "沖縄")
+              checkin = params.get("checkin", "2025-03-15")
+              checkout = params.get("checkout", "2025-03-17")
+              hotels = [
+                  {"name": "オーシャンビューリゾート", "price_per_night": 25000, "rating": 4.5, "type": "リゾート"},
+                  {"name": "シティホテル那覇", "price_per_night": 12000, "rating": 4.0, "type": "ビジネス"},
+                  {"name": "ビーチフロント ヴィラ", "price_per_night": 45000, "rating": 4.8, "type": "高級"},
+                  {"name": "ゲストハウス美ら海", "price_per_night": 5000, "rating": 3.8, "type": "ゲストハウス"},
+              ]
+              return {"city": city, "checkin": checkin, "checkout": checkout, "hotels": hotels}
+
+          def get_weather(params):
+              city = params.get("city", "沖縄")
+              date = params.get("date", "2025-03-15")
+              weathers = ["晴れ", "曇り", "晴れ時々曇り", "曇り時々雨"]
+              return {
+                  "city": city, "date": date,
+                  "condition": random.choice(weathers),
+                  "high_temp": random.randint(25, 32),
+                  "low_temp": random.randint(20, 25),
+                  "rain_probability": random.randint(0, 40),
+              }
+
+  # ==========================================================================
+  # Lambda Permission (AgentCore Gateway からの呼び出しを許可)
+  # ==========================================================================
+  TravelToolsGatewayPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TravelToolsFunction
+      Action: lambda:InvokeFunction
+      Principal: bedrock-agentcore.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+
+Outputs:
+  FunctionArn:
+    Value: !GetAtt TravelToolsFunction.Arn
+    Description: Lambda 関数 ARN（Gateway Target 登録時に使用）
+
+  FunctionName:
+    Value: !Ref TravelToolsFunction
+    Description: Lambda 関数名
+
+  DeployCommand:
+    Value: !Sub |
+      aws cloudformation deploy \
+        --template-file lambda-cfn.yaml \
+        --stack-name agentcore-travel-tools \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --region ${AWS::Region}
+    Description: デプロイコマンド

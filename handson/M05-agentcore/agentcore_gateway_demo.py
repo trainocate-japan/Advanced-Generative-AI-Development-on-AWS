@@ -8,11 +8,20 @@
   pip install boto3
   AWS 認証情報が設定済み（us-east-1）
 
+  Lambda 関数のデプロイ（先に実行）:
+    cd ~/handson/M05-agentcore
+    aws cloudformation deploy \
+      --template-file lambda-cfn.yaml \
+      --stack-name agentcore-travel-tools \
+      --capabilities CAPABILITY_NAMED_IAM \
+      --region us-east-1
+
 実行:
   python3.12 agentcore_gateway_demo.py
 
 クリーンアップ:
   python3.12 agentcore_gateway_demo.py --cleanup
+  aws cloudformation delete-stack --stack-name agentcore-travel-tools --region us-east-1
 """
 
 import boto3
@@ -171,10 +180,19 @@ def create_gateway_target(gateway_id):
         },
     ]
 
-    # Lambda ARN を取得（デモ環境で作成済みのものを想定）
-    # ここではダミー ARN を使用。実環境では実際の Lambda ARN を指定
-    account_id = boto3.client("sts").get_caller_identity()["Account"]
-    lambda_arn = f"arn:aws:lambda:{REGION}:{account_id}:function:travel-tools"
+    # Lambda ARN を取得（CFn スタック agentcore-travel-tools でデプロイ済み）
+    lambda_client = boto3.client("lambda", region_name=REGION)
+    try:
+        fn = lambda_client.get_function(FunctionName="travel-tools")
+        lambda_arn = fn["Configuration"]["FunctionArn"]
+    except Exception:
+        account_id = boto3.client("sts").get_caller_identity()["Account"]
+        lambda_arn = f"arn:aws:lambda:{REGION}:{account_id}:function:travel-tools"
+        print(f"    ⚠ Lambda 関数が見つかりません。先にデプロイしてください:")
+        print(f"      aws cloudformation deploy \\")
+        print(f"        --template-file lambda-cfn.yaml \\")
+        print(f"        --stack-name agentcore-travel-tools \\")
+        print(f"        --capabilities CAPABILITY_NAMED_IAM --region {REGION}")
 
     print(f"    Lambda ARN: {lambda_arn}")
     print(f"    登録ツール数: {len(tool_schema)}")
