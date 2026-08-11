@@ -453,6 +453,17 @@ def lambda_handler(event, context):
         provider = body.get('provider', '')
         failure_type = body.get('failure_type', 'none')
 
+        # プロバイダー名のバリデーション
+        valid_providers = ['anthropic', 'amazon', 'meta']
+        if provider not in valid_providers:
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({
+                    'error': f"Invalid provider '{provider}'. Must be one of: {valid_providers}"
+                })
+            }
+
         if failure_type == 'none':
             set_simulated_failure(provider, 'none')
             msg = f"Failure simulation removed for {provider}"
