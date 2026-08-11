@@ -251,9 +251,8 @@ def index_documents(client, chunks):
         if (i + 1) % 5 == 0 or i == len(chunks) - 1:
             print(f"     進捗: {i + 1}/{len(chunks)}")
 
-    # インデックスのリフレッシュ
-    time.sleep(2)
-    client.indices.refresh(index=INDEX_NAME)
+    # OpenSearch Serverless は自動リフレッシュのため明示的な refresh 不要
+    time.sleep(5)  # インデックス反映を少し待つ
     print(f"\n  ✅ インデックス投入完了: {len(chunks)} ドキュメント")
 
 
