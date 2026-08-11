@@ -20,6 +20,85 @@ Resources:
         AllowHeaders: "'*'"
         AllowOrigin: "'*'"
 
+  # AWS AppConfig - Application
+  ModelSelectionAppConfigApp:
+    Type: AWS::AppConfig::Application
+    Properties:
+      Name: genai-model-selection
+
+  # AWS AppConfig - Environment
+  ModelSelectionAppConfigEnv:
+    Type: AWS::AppConfig::Environment
+    Properties:
+      ApplicationId: !Ref ModelSelectionAppConfigApp
+      Name: production
+
+  # AWS AppConfig - Configuration Profile (Freeform)
+  ModelSelectionConfigProfile:
+    Type: AWS::AppConfig::ConfigurationProfile
+    Properties:
+      ApplicationId: !Ref ModelSelectionAppConfigApp
+      Name: routing-config
+      LocationUri: hosted
+      Type: AWS.Freeform
+
+  # AWS AppConfig - Hosted Configuration Version (初期設定)
+  ModelSelectionConfigVersion:
+    Type: AWS::AppConfig::HostedConfigurationVersion
+    Properties:
+      ApplicationId: !Ref ModelSelectionAppConfigApp
+      ConfigurationProfileId: !Ref ModelSelectionConfigProfile
+      ContentType: application/json
+      Content: |
+        {
+          "routing_rules": {
+            "simple": {
+              "primary": "amazon.nova-lite-v1:0",
+              "fallback": "amazon.nova-lite-v1:0"
+            },
+            "medium": {
+              "primary": "amazon.nova-pro-v1:0",
+              "fallback": "amazon.nova-lite-v1:0"
+            },
+            "complex": {
+              "primary": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+              "fallback": "amazon.nova-pro-v1:0"
+            }
+          },
+          "circuit_breaker": {
+            "failure_threshold": 5,
+            "timeout_seconds": 30
+          },
+          "cost_budget": {
+            "daily_limit_usd": 50,
+            "budget_exceeded_model": "amazon.nova-lite-v1:0"
+          },
+          "classification_keywords": {
+            "complex": ["分析", "評価", "設計", "比較", "アーキテクチャ", "リスク", "コンプライアンス", "最適化", "戦略"],
+            "simple": ["とは", "何ですか", "教えて", "リスト", "一覧"]
+          }
+        }
+
+  # AWS AppConfig - Deployment Strategy (即時デプロイ)
+  ImmediateDeployStrategy:
+    Type: AWS::AppConfig::DeploymentStrategy
+    Properties:
+      Name: Immediate
+      DeploymentDurationInMinutes: 0
+      GrowthFactor: 100
+      FinalBakeTimeInMinutes: 0
+      ReplicateTo: NONE
+
+  # AWS AppConfig - Initial Deployment
+  ModelSelectionConfigDeployment:
+    Type: AWS::AppConfig::Deployment
+    Properties:
+      ApplicationId: !Ref ModelSelectionAppConfigApp
+      EnvironmentId: !Ref ModelSelectionAppConfigEnv
+      ConfigurationProfileId: !Ref ModelSelectionConfigProfile
+      ConfigurationVersion: !Ref ModelSelectionConfigVersion
+      DeploymentStrategyId: !Ref ImmediateDeployStrategy
+
   # Lambda Router Function
   RouterFunction:
     Type: AWS::Serverless::Function
@@ -29,11 +108,9 @@ Resources:
       Handler: router.lambda_handler
       Environment:
         Variables:
-          PRIMARY_MODEL: us.anthropic.claude-sonnet-4-5-20250929-v1:0
-          FALLBACK_MODEL: amazon.nova-pro-v1:0
-          BUDGET_MODEL: amazon.nova-lite-v1:0
-          CIRCUIT_BREAKER_THRESHOLD: "5"
-          CIRCUIT_BREAKER_TIMEOUT: "30"
+          APPCONFIG_APP: !Ref ModelSelectionAppConfigApp
+          APPCONFIG_ENV: !Ref ModelSelectionAppConfigEnv
+          APPCONFIG_PROFILE: !Ref ModelSelectionConfigProfile
           FAILURE_SIM_PREFIX: /genai/model-selection/simulate-failure/
       Policies:
         - Statement:
@@ -56,6 +133,25 @@ Resources:
                 - ssm:PutParameter
               Resource:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/model-selection/simulate-failure/*"
+            - Effect: Allow
+              Action:
+                - appconfig:GetLatestConfiguration
+                - appconfig:StartConfigurationSession
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - appconfig:CreateHostedConfigurationVersion
+                - appconfig:StartDeployment
+                - appconfig:GetHostedConfigurationVersion
+                - appconfig:ListHostedConfigurationVersions
+              Resource:
+                - !Sub "arn:aws:appconfig:${AWS::Region}:${AWS::AccountId}:application/${ModelSelectionAppConfigApp}"
+                - !Sub "arn:aws:appconfig:${AWS::Region}:${AWS::AccountId}:application/${ModelSelectionAppConfigApp}/*"
+            - Effect: Allow
+              Action:
+                - appconfig:GetDeploymentStrategy
+                - appconfig:ListDeploymentStrategies
+              Resource: "*"
       Events:
         QueryApi:
           Type: Api
@@ -75,6 +171,18 @@ Resources:
             RestApiId: !Ref ModelSelectionApi
             Path: /admin/simulate-failure
             Method: post
+        AdminConfigGetApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ModelSelectionApi
+            Path: /admin/config
+            Method: get
+        AdminConfigPutApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ModelSelectionApi
+            Path: /admin/config
+            Method: put
 
   # SSM Parameters for failure simulation
   FailureSimAnthropicParam:
