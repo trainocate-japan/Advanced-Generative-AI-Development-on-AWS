@@ -294,37 +294,6 @@ def get_version_details(prompt_id, version):
 
 
 # ============================================================
-# ステップ 7: クリーンアップ
-# ============================================================
-
-def cleanup(prompt_id, versions):
-    """作成したリソースを削除"""
-    print(f"\n{'─' * 70}")
-    print("  ステップ 7: クリーンアップ")
-    print(f"{'─' * 70}")
-
-    # バージョンを削除（新しい方から）
-    for v in sorted(versions, reverse=True):
-        try:
-            bedrock_agent.delete_prompt(
-                promptIdentifier=prompt_id,
-                promptVersion=str(v)
-            )
-            print(f"  ✅ バージョン {v} を削除")
-        except Exception as e:
-            print(f"  ⚠️  バージョン {v} の削除エラー: {e}")
-
-    # プロンプト自体を削除
-    try:
-        bedrock_agent.delete_prompt(promptIdentifier=prompt_id)
-        print(f"  ✅ プロンプト {PROMPT_NAME} を削除")
-    except Exception as e:
-        print(f"  ⚠️  プロンプト削除エラー: {e}")
-
-    print("\n  クリーンアップ完了 🧹")
-
-
-# ============================================================
 # メイン実行
 # ============================================================
 
@@ -340,7 +309,9 @@ def main():
   4. バージョン一覧の確認
   5. 2つのバージョンを Converse API で実行・比較
   6. バージョン詳細の確認
-  7. クリーンアップ
+
+  ※ 作成したプロンプトはコンソールで確認・削除できます
+  ※ Bedrock → プロンプト管理 → "{PROMPT_NAME}" を参照
 """)
 
     prompt_id = None
@@ -375,12 +346,6 @@ def main():
         import traceback
         traceback.print_exc()
 
-    finally:
-        # ステップ 7: クリーンアップ
-        if prompt_id:
-            print()
-            cleanup(prompt_id, versions)
-
     print(f"""
 {'=' * 70}
   まとめ: Bedrock プロンプト管理の利点
@@ -400,7 +365,17 @@ def main():
   • 開発: DRAFT で試行錯誤
   • テスト: バージョン作成 → staging エイリアスで検証
   • 本番: production エイリアスを更新 → 問題あればロールバック
+
+  クリーンアップ:
+  • AWS コンソール → Bedrock → プロンプト管理 → プロンプトを選択して削除
+  • または: aws bedrock-agent delete-prompt --prompt-identifier <PROMPT_ID>
 """)
+
+    # プロンプトIDを表示（手動クリーンアップ用）
+    if prompt_id:
+        print(f"  作成されたプロンプト ID: {prompt_id}")
+        print(f"  削除コマンド: aws bedrock-agent delete-prompt --prompt-identifier {prompt_id} --region us-east-1")
+        print()
 
 
 if __name__ == "__main__":
