@@ -143,6 +143,95 @@ python3.12 pipeline_demo.py
 3. 削減率（通常 60-70% 削減）を強調
 4. 品質への影響が最小限であることを確認
 
+### デモ 4: AWS Glue Data Quality（5分）
+1. DQDL ルール定義を表示し各ルールの意味を解説
+2. サンプルデータの品質問題（age=150、空の email）を確認
+3. `glue_data_quality_demo.py` を実行（事前に評価を開始しておくと時短）
+4. 合格/不合格の結果と総合スコアを表示
+5. 本番では Glue ETL パイプラインに組み込み自動化されることを説明
+
+---
+
+## パート 5: AWS Glue Data Quality による自動検証（15分）
+
+### ステップ 5.1: デモ環境のデプロイ
+
+CloudFormation スタックをデプロイして、Glue Data Catalog と S3 バケットを準備します：
+
+```bash
+aws cloudformation create-stack \
+  --stack-name glue-data-quality-demo \
+  --template-body file://../../infra/glue-data-quality-demo.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+スタック作成完了を待ちます（3〜4分）：
+
+```bash
+aws cloudformation wait stack-create-complete --stack-name glue-data-quality-demo
+```
+
+### ステップ 5.2: サンプルデータの確認
+
+`sample-data/customers.csv` には意図的な品質問題を含む12件の顧客データがあります：
+
+| 問題 | レコード | 内容 |
+|------|----------|------|
+| 欠損値 | C005 | email が空 |
+| 範囲外 | C008 | age = 150（18〜120 の範囲外） |
+| 欠損値 | C009 | name が空 |
+| 無効値 | C011 | membership_type = "gold"（想定外の値） |
+
+### ステップ 5.3: DQDL ルールの確認
+
+以下の DQDL（Data Quality Definition Language）ルールで品質を検証します：
+
+```
+Rules = [
+    ColumnCount = 6,
+    IsComplete "customer_id",
+    ColumnDataType "email" = "STRING",
+    IsUnique "customer_id",
+    ColumnValues "age" between 18 and 120
+]
+```
+
+各ルールの意味：
+- **ColumnCount = 6**: テーブルのカラム数が6であること
+- **IsComplete "customer_id"**: customer_id に NULL がないこと
+- **ColumnDataType "email" = "STRING"**: email カラムが文字列型であること
+- **IsUnique "customer_id"**: customer_id に重複がないこと
+- **ColumnValues "age" between 18 and 120**: 年齢が18〜120の範囲内であること
+
+### ステップ 5.4: Glue Data Quality 評価の実行
+
+デモスクリプトを実行します（評価ジョブの起動に 2〜5 分かかります）：
+
+```bash
+python3.12 glue_data_quality_demo.py
+```
+
+スクリプトは以下を実行します：
+1. CloudFormation スタックの出力確認
+2. DQDL ルールセットの作成
+3. ルール評価ジョブの開始
+4. 評価完了待機
+5. 結果表示（各ルールの合格/不合格、総合スコア）
+
+### ステップ 5.5: 評価結果の確認
+
+出力で以下を確認します：
+- `ColumnValues "age" between 18 and 120` → **FAIL**（C008 の age=150 が違反）
+- その他のルール → **PASS**
+- 総合品質スコア（0〜1.0）
+
+### ステップ 5.6: クリーンアップ
+
+```bash
+aws cloudformation delete-stack --stack-name glue-data-quality-demo
+```
+
 ---
 
 ## クリーンアップ
@@ -151,6 +240,7 @@ python3.12 pipeline_demo.py
 # ローカル実行のためクリーンアップは不要
 # AWS リソースを作成した場合:
 aws cloudformation delete-stack --stack-name data-processing-demo
+aws cloudformation delete-stack --stack-name glue-data-quality-demo
 ```
 
 ---
@@ -160,3 +250,4 @@ aws cloudformation delete-stack --stack-name data-processing-demo
 1. **音声統合**: Amazon Transcribe を追加して音声入力も処理するパイプラインを設計
 2. **品質アラート**: CloudWatch アラームで品質スコアが低下した場合に通知
 3. **データリネージュ**: 処理の各ステージでの変換を追跡するメタデータ管理を実装
+4. **Glue Data Quality 拡張**: IsComplete ルールを email カラムにも追加し、推奨ルール機能（`StartDataQualityRuleRecommendationRun`）を試す

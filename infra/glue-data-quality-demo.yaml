@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  モジュール 2: AWS Glue Data Quality デモ用スタック
+  Glue Database/Table + S3 バケット + IAM ロール + サンプルデータアップロード
+  クリーンアップ: aws cloudformation delete-stack --stack-name glue-data-quality-demo
+
+Resources:
+  # ==========================================================================
+  # S3 バケット（サンプルデータ格納）
+  # ==========================================================================
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "glue-dq-demo-${AWS::AccountId}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+      Tags:
+        - Key: Project
+          Value: M02-GlueDataQuality
+
+  # ==========================================================================
+  # サンプル CSV を S3 にアップロードする Lambda（カスタムリソース）
+  # ==========================================================================
+  UploadSampleDataFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: glue-dq-upload-sample-data
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt UploadFunctionRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref DataBucket
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+
+          s3 = boto3.client('s3')
+          BUCKET = os.environ['BUCKET_NAME']
+
+          SAMPLE_CSV = """customer_id,name,email,age,membership_type,signup_date
+          C001,田中太郎,tanaka@example.com,35,premium,2024-01-15
+          C002,山田花子,yamada@example.com,28,standard,2024-02-20
+          C003,佐藤健一,sato@example.com,45,premium,2024-03-10
+          C004,鈴木美咲,suzuki@example.com,22,standard,2024-04-05
+          C005,高橋誠,,52,premium,2024-05-12
+          C006,伊藤裕子,ito@example.com,19,standard,2024-06-01
+          C007,渡辺大輔,watanabe@example.com,67,premium,2024-07-20
+          C008,中村愛,nakamura@example.com,150,standard,2024-08-15
+          C009,,yamamoto@example.com,41,premium,2024-09-30
+          C010,小林真理,kobayashi@example.com,33,standard,2024-10-22
+          C011,加藤雅人,kato@example.com,29,gold,2024-11-01
+          C012,吉田恵美,yoshida@example.com,38,premium,2024-11-15
+          """.strip()
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ('Create', 'Update'):
+                      # インデントを削除
+                      lines = [line.strip() for line in SAMPLE_CSV.split('\n')]
+                      csv_content = '\n'.join(lines)
+                      s3.put_object(
+                          Bucket=BUCKET,
+                          Key='customers/customers.csv',
+                          Body=csv_content.encode('utf-8'),
+                          ContentType='text/csv'
+                      )
+                  elif event['RequestType'] == 'Delete':
+                      # バケット内のオブジェクトを削除
+                      response = s3.list_objects_v2(Bucket=BUCKET)
+                      for obj in response.get('Contents', []):
+                          s3.delete_object(Bucket=BUCKET, Key=obj['Key'])
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
+
+  UploadFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt DataBucket.Arn
+                  - !Sub "${DataBucket.Arn}/*"
+
+  UploadSampleData:
+    Type: Custom::UploadSampleData
+    DependsOn: DataBucket
+    Properties:
+      ServiceToken: !GetAtt UploadSampleDataFunction.Arn
+
+  # ==========================================================================
+  # Glue IAM ロール
+  # ==========================================================================
+  GlueRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: GlueDQDemoRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Policies:
+        - PolicyName: S3DataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt DataBucket.Arn
+                  - !Sub "${DataBucket.Arn}/*"
+
+  # ==========================================================================
+  # Glue Data Catalog
+  # ==========================================================================
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: glue_dq_demo_db
+        Description: "Glue Data Quality デモ用データベース"
+
+  GlueTable:
+    Type: AWS::Glue::Table
+    DependsOn: UploadSampleData
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: customers
+        Description: "顧客マスタ（品質検証デモ用）"
+        TableType: EXTERNAL_TABLE
+        Parameters:
+          classification: csv
+          typeOfData: file
+          skip.header.line.count: "1"
+          delimiter: ","
+        StorageDescriptor:
+          Location: !Sub "s3://${DataBucket}/customers/"
+          InputFormat: org.apache.hadoop.mapred.TextInputFormat
+          OutputFormat: org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
+          SerdeInfo:
+            SerializationLibrary: org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe
+            Parameters:
+              field.delim: ","
+              serialization.format: ","
+          Columns:
+            - Name: customer_id
+              Type: string
+            - Name: name
+              Type: string
+            - Name: email
+              Type: string
+            - Name: age
+              Type: int
+            - Name: membership_type
+              Type: string
+            - Name: signup_date
+              Type: string
+
+Outputs:
+  GlueRoleArn:
+    Value: !GetAtt GlueRole.Arn
+    Description: Glue Data Quality 実行用 IAM ロール ARN
+
+  DataBucketName:
+    Value: !Ref DataBucket
+    Description: サンプルデータ格納 S3 バケット
+
+  DatabaseName:
+    Value: !Ref GlueDatabase
+    Description: Glue Database 名
+
+  TableName:
+    Value: customers
+    Description: Glue Table 名
+
+  RunDemoCommand:
+    Value: "python3.12 glue_data_quality_demo.py"
+    Description: デモ実行コマンド
+
+  DeleteStack:
+    Value: !Sub "aws cloudformation delete-stack --stack-name glue-data-quality-demo --region ${AWS::Region}"
+    Description: スタック削除コマンド

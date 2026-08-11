@@ -1,0 +1,13 @@
+customer_id,name,email,age,membership_type,signup_date
+C001,田中太郎,tanaka@example.com,35,premium,2024-01-15
+C002,山田花子,yamada@example.com,28,standard,2024-02-20
+C003,佐藤健一,sato@example.com,45,premium,2024-03-10
+C004,鈴木美咲,suzuki@example.com,22,standard,2024-04-05
+C005,高橋誠,,52,premium,2024-05-12
+C006,伊藤裕子,ito@example.com,19,standard,2024-06-01
+C007,渡辺大輔,watanabe@example.com,67,premium,2024-07-20
+C008,中村愛,nakamura@example.com,150,standard,2024-08-15
+C009,,yamamoto@example.com,41,premium,2024-09-30
+C010,小林真理,kobayashi@example.com,33,standard,2024-10-22
+C011,加藤雅人,kato@example.com,29,gold,2024-11-01
+C012,吉田恵美,yoshida@example.com,38,premium,2024-11-15

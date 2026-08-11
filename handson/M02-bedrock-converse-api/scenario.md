@@ -18,6 +18,7 @@
 2. **マルチモーダル処理**: テキスト + 画像を統合した Converse API 呼び出しを実装する
 3. **入力最適化**: トークン効率を最大化するプロンプト圧縮とコンテキスト管理を実装する
 4. **バッチ処理**: SQS + Lambda による動的バッチサイジングを実装する
+5. **自動品質検証**: AWS Glue Data Quality の DQDL ルールで品質を宣言的に定義・評価する
 
 ## アーキテクチャ
 
@@ -42,6 +43,7 @@
 
 - Amazon Bedrock（Converse API - テキスト・画像）
 - Amazon Comprehend（PII 検出）
+- AWS Glue Data Quality（DQDL ルールによる自動品質検証）
 - AWS Lambda（検証・処理）
 - Amazon SQS（バッチキュー）
 - Amazon S3（入力データ）
@@ -49,7 +51,7 @@
 
 ## 所要時間
 
-約 45 分
+約 60 分
 
 ## 前提条件
 
