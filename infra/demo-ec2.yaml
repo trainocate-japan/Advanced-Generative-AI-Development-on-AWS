@@ -136,6 +136,27 @@ Resources:
                   - aoss:*
                   - s3vectors:*
                 Resource: '*'
+        - PolicyName: BedrockAgentCoreAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock-agentcore:*
+                  - bedrock-agentcore-control:*
+                Resource: '*'
+        - PolicyName: ECRAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                Resource: '*'
         - PolicyName: SSMParameterStoreAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -207,6 +228,8 @@ Resources:
           echo "[2/6] Python ライブラリ..."
           pip3.12 install --upgrade pip
           pip3.12 install boto3 streamlit numpy pandas opensearch-py requests-aws4auth
+          pip3.12 install strands-agents strands-agents-tools
+          pip3.12 install bedrock-agentcore bedrock-agentcore-starter-toolkit
 
           # AWS SAM CLI
           echo "[3/6] SAM CLI..."
