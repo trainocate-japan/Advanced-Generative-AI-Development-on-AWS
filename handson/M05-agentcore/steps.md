@@ -144,34 +144,33 @@ python3.12 agentcore_identity_demo.py --cleanup
 
 ### ステップ 2.4: AgentCore Runtime - サーバーレスデプロイ
 
+エージェントコードの生成（Gateway / Memory の URL を埋め込み）：
 ```bash
 python3.12 agentcore_runtime_deploy.py
 ```
 
-実行内容：
-1. Strands エージェントのコードを生成
-2. starter-toolkit で configure → launch（ビルド＆デプロイ）
-3. デプロイ済みエージェントを invoke で呼び出し
-
-※ Docker が起動中であること
-
-デプロイの 3 ステップ:
-```python
-from bedrock_agentcore_starter_toolkit import Runtime
-
-runtime = Runtime()
-runtime.configure(entrypoint="agent.py", ...)  # 設定
-runtime.launch()                                # ビルド & デプロイ
-runtime.invoke({"prompt": "..."})              # 呼び出し
-```
-
-呼び出しテスト：
+生成されたファイルを使って CLI でデプロイ：
 ```bash
-python3.12 agentcore_runtime_deploy.py --invoke "東京から沖縄の旅行プラン"
+# 1. Configure
+agentcore configure -e runtime_agent.py -r us-east-1 --disable-memory
+
+# 2. Deploy（CodeBuild でリモートビルド、数分かかります）
+agentcore deploy
+
+# 3. 呼び出しテスト
+agentcore invoke '{"prompt": "東京から沖縄の2泊3日旅行プランを作って"}'
 ```
+
+※ 前ステップで作成した Gateway と Memory が自動検出され、エージェントコードに組み込まれます。
+
+デプロイの仕組み：
+- `agentcore configure`: エントリーポイント、リージョンを設定
+- `agentcore deploy`: CodeBuild でビルド → AgentCore Runtime にデプロイ
+- `agentcore invoke`: デプロイ済みエージェントを呼び出し
 
 クリーンアップ：
 ```bash
+agentcore destroy
 python3.12 agentcore_runtime_deploy.py --cleanup
 ```
 
@@ -241,6 +240,9 @@ python3.12 framework_crewai.py
 python3.12 agentcore_gateway_demo.py --cleanup
 python3.12 agentcore_memory_demo.py --cleanup
 python3.12 agentcore_identity_demo.py --cleanup
+
+# Runtime のエージェント削除
+agentcore destroy
 python3.12 agentcore_runtime_deploy.py --cleanup
 
 # Lambda 関数の削除
