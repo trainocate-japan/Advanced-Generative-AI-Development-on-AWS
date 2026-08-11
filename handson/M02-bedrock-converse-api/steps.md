@@ -364,7 +364,41 @@ python3.12 glue_data_quality_demo.py
 - その他のルール → **PASS**
 - 総合品質スコア（0〜1.0）
 
-### ステップ 5.6: クリーンアップ
+### ステップ 5.6: Glue ETL ジョブでの Data Quality 評価（ダッシュボード確認）
+
+スタックに含まれる Glue ETL ジョブを実行して、コンソールの Data Quality ダッシュボードを確認します：
+
+```bash
+# ジョブ実行
+aws glue start-job-run --job-name dq-customers-quality-check --region us-east-1
+```
+
+ジョブの完了を待ちます（約2〜3分）：
+
+```bash
+# 実行状態の確認
+aws glue get-job-runs --job-name dq-customers-quality-check --region us-east-1 \
+  --query "JobRuns[0].{Status:JobRunState,Duration:ExecutionTime}"
+```
+
+### ステップ 5.7: Data Quality ダッシュボードの確認
+
+ジョブ完了後、コンソールで Data Quality ダッシュボードを確認します：
+
+1. **AWS Glue コンソール** を開く
+2. 左メニューから **Data Integration and ETL → ETL jobs** を選択
+3. ジョブ一覧から **`dq-customers-quality-check`** をクリック
+4. 上部タブの **「Data quality」** タブをクリック
+
+ダッシュボードで確認できる項目：
+- **DQ score**: 総合品質スコア（%）
+- **Data quality trend**: スコアの時系列推移
+- **Anomalies**: 異常検知グラフ
+- **Rules タブ**: 各ルールの合格/不合格と評価メトリクス
+
+ジョブを複数回実行するとトレンドグラフにデータが蓄積されます。
+
+### ステップ 5.8: クリーンアップ
 
 ```bash
 aws cloudformation delete-stack --stack-name glue-data-quality-demo

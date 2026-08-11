@@ -137,10 +137,136 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
+                  - s3:PutObject
                   - s3:ListBucket
                 Resource:
                   - !GetAtt DataBucket.Arn
                   - !Sub "${DataBucket.Arn}/*"
+
+  # ==========================================================================
+  # Glue ETL ジョブスクリプトを S3 にアップロード
+  # ==========================================================================
+  UploadGlueScriptFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: glue-dq-upload-script
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt UploadFunctionRole.Arn
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref DataBucket
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import os
+
+          s3 = boto3.client('s3')
+          BUCKET = os.environ['BUCKET_NAME']
+
+          GLUE_SCRIPT = '''
+          import sys
+          from awsglue.transforms import *
+          from awsglue.utils import getResolvedOptions
+          from pyspark.context import SparkContext
+          from awsglue.context import GlueContext
+          from awsglue.job import Job
+          from awsgluedq.transforms import EvaluateDataQuality
+
+          args = getResolvedOptions(sys.argv, ["JOB_NAME"])
+          sc = SparkContext.getOrCreate()
+          glueContext = GlueContext(sc)
+          spark = glueContext.spark_session
+          job = Job(glueContext)
+          job.init(args["JOB_NAME"], args)
+
+          # Data Catalog からデータを読み込み
+          customers_df = glueContext.create_dynamic_frame.from_catalog(
+              database="glue_dq_demo_db",
+              table_name="customers"
+          )
+
+          print(f"レコード数: {customers_df.count()}")
+          customers_df.toDF().show()
+
+          # DQDL ルールセット定義
+          ruleset = """
+          Rules = [
+              ColumnCount = 6,
+              IsComplete "customer_id",
+              ColumnDataType "email" = "STRING",
+              IsUnique "customer_id",
+              ColumnValues "age" between 18 and 120
+          ]
+          """
+
+          # Data Quality 評価を実行
+          dq_results = EvaluateDataQuality.apply(
+              frame=customers_df,
+              ruleset=ruleset,
+              publishing_options={
+                  "dataQualityEvaluationContext": "customers_quality_check",
+                  "enableDataQualityCloudWatchMetrics": True,
+                  "enableDataQualityResultsPublishing": True,
+              },
+          )
+
+          # 結果を表示
+          print("\\n===== Data Quality Results =====")
+          dq_results.toDF().show(truncate=False)
+
+          job.commit()
+          '''
+
+          def handler(event, context):
+              try:
+                  if event['RequestType'] in ('Create', 'Update'):
+                      s3.put_object(
+                          Bucket=BUCKET,
+                          Key='scripts/dq_etl_job.py',
+                          Body=GLUE_SCRIPT.encode('utf-8'),
+                          ContentType='text/x-python'
+                      )
+                  elif event['RequestType'] == 'Delete':
+                      s3.delete_object(Bucket=BUCKET, Key='scripts/dq_etl_job.py')
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f"Error: {e}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {"Error": str(e)})
+
+  UploadGlueScript:
+    Type: Custom::UploadGlueScript
+    DependsOn: DataBucket
+    Properties:
+      ServiceToken: !GetAtt UploadGlueScriptFunction.Arn
+
+  # ==========================================================================
+  # Glue ETL ジョブ（EvaluateDataQuality 付き）
+  # ==========================================================================
+  DQEtlJob:
+    Type: AWS::Glue::Job
+    DependsOn: UploadGlueScript
+    Properties:
+      Name: dq-customers-quality-check
+      Description: "顧客データの品質チェック ETL ジョブ（Data Quality ダッシュボード対応）"
+      Role: !GetAtt GlueRole.Arn
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub "s3://${DataBucket}/scripts/dq_etl_job.py"
+        PythonVersion: "3"
+      DefaultArguments:
+        "--job-language": "python"
+        "--TempDir": !Sub "s3://${DataBucket}/temp/"
+        "--enable-metrics": "true"
+        "--enable-continuous-cloudwatch-log": "true"
+      GlueVersion: "4.0"
+      NumberOfWorkers: 2
+      WorkerType: G.1X
+      Timeout: 10
+      Tags:
+        Project: M02-GlueDataQuality
 
   # ==========================================================================
   # Glue Data Catalog
@@ -208,9 +334,21 @@ Outputs:
     Value: customers
     Description: Glue Table 名
 
+  GlueJobName:
+    Value: !Ref DQEtlJob
+    Description: Glue ETL ジョブ名
+
+  RunJobCommand:
+    Value: !Sub "aws glue start-job-run --job-name ${DQEtlJob} --region ${AWS::Region}"
+    Description: Glue ジョブ実行コマンド
+
+  JobConsoleURL:
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/glue/home#/v2/etl-configuration/jobs/view/${DQEtlJob}"
+    Description: Glue ジョブコンソール URL（Data Quality タブ確認用）
+
   RunDemoCommand:
     Value: "python3.12 glue_data_quality_demo.py"
-    Description: デモ実行コマンド
+    Description: デモスクリプト実行コマンド
 
   DeleteStack:
     Value: !Sub "aws cloudformation delete-stack --stack-name glue-data-quality-demo --region ${AWS::Region}"
