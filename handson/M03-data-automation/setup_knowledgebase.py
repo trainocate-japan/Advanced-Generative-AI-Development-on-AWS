@@ -263,6 +263,20 @@ def sync_data_source(kb_id, ds_id):
     """データソースを同期（インジェスション）"""
     print(f"\n  ▶ データソースを同期中...")
 
+    # ナレッジベースが ACTIVE になるまで待機
+    print(f"    KB ステータス確認中...", end="")
+    for _ in range(30):
+        kb_resp = bedrock_agent.get_knowledge_base(knowledgeBaseId=kb_id)
+        kb_status = kb_resp['knowledgeBase']['status']
+        if kb_status == 'ACTIVE':
+            print(f" ACTIVE ✓")
+            break
+        print(".", end="", flush=True)
+        time.sleep(5)
+    else:
+        print(f"\n  ⚠ KB ステータスが ACTIVE になりません（現在: {kb_status}）")
+        return
+
     try:
         response = bedrock_agent.start_ingestion_job(
             knowledgeBaseId=kb_id,
