@@ -1,0 +1,24 @@
+{
+  "departments": [
+    {
+      "name": "Finance",
+      "prefixPath": "departments/finance"
+    },
+    {
+      "name": "IT",
+      "prefixPath": "departments/it"
+    },
+    {
+      "name": "HR",
+      "prefixPath": "departments/hr"
+    },
+    {
+      "name": "Operations",
+      "prefixPath": "departments/operations"
+    },
+    {
+      "name": "Marketing",
+      "prefixPath": "departments/marketing"
+    }
+  ]
+}

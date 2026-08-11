@@ -1,0 +1,218 @@
+import json
+import boto3
+import os
+import email
+import logging
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+def lambda_handler(event, context):
+    """
+    Lambda function to route emails to department-specific folders and optionally to email addresses
+    
+    This function is triggered by messages in the SQS queue.
+    It retrieves the email from S3, organizes it into department-specific folders,
+    and optionally routes it to the department's email address if SES is configured.
+    """
+    logger.info("Email router Lambda triggered")
+    
+    # Initialize AWS clients
+    s3 = boto3.client('s3')
+    
+    # Get environment variables (these now contain full bucket names)
+    config_bucket_name = os.environ.get('CONFIG_BUCKET_NAME')
+    config_file_key = os.environ.get('CONFIG_FILE_KEY', 'department_config.json')
+    inbox_bucket = os.environ.get('INBOX_BUCKET')
+    destination_bucket = os.environ.get('DESTINATION_BUCKET')
+    
+    logger.info(f"Using bucket names - Config: {config_bucket_name}, Inbox: {inbox_bucket}, Destination: {destination_bucket}")
+    
+    # Read the configuration file
+    try:
+        logger.info(f"Reading configuration from s3://{config_bucket_name}/{config_file_key}")
+        response = s3.get_object(Bucket=config_bucket_name, Key=config_file_key)
+        config = json.loads(response['Body'].read().decode('utf-8'))
+        departments_config = {dept['name']: dept for dept in config.get('departments', [])}
+        sender_email = config.get('settings', {}).get('senderEmail', 'invoices@example.com')
+    except Exception as e:
+        logger.error(f"Error reading configuration: {str(e)}")
+        departments_config = {}
+        sender_email = 'invoices@example.com'
+    
+    # Process each record from SQS
+    for record in event['Records']:
+        try:
+            # Parse the message
+            message = json.loads(record['body'])
+            
+            # Extract organization information
+            department = message.get('department', 'Unknown')
+            email_key = message.get('emailKey')
+            original_email_key = message.get('originalEmailKey')
+            destination_bucket_name = message.get('destinationBucket', destination_bucket)
+            inbox_bucket_name = message.get('inboxBucket', inbox_bucket)
+            
+            logger.info(f"Processing email for {department} department")
+            logger.info(f"Email key: {email_key}")
+            logger.info(f"Original email key: {original_email_key}")
+            
+            if not email_key or not destination_bucket_name:
+                logger.error("Missing required organization information")
+                continue
+            
+            # Get the email object from S3 (destination bucket)
+            try:
+                response = s3.get_object(Bucket=destination_bucket_name, Key=email_key)
+                email_content = response['Body'].read()
+            except Exception as e:
+                logger.error(f"Error getting email from destination bucket: {str(e)}")
+                # Try to get from inbox bucket if destination failed
+                try:
+                    if original_email_key:
+                        response = s3.get_object(Bucket=inbox_bucket_name, Key=original_email_key)
+                        email_content = response['Body'].read()
+                    else:
+                        raise Exception("No original email key available")
+                except Exception as inner_e:
+                    logger.error(f"Error getting email from inbox bucket: {str(inner_e)}")
+                    continue
+            
+            # Create a metadata file with classification information
+            metadata = {
+                'department': department,
+                'originalKey': original_email_key or '',
+                'metadata': message.get('metadata', {})
+            }
+            
+            # Get prefix path from config or use default
+            dept_config = departments_config.get(department, {})
+            prefix_path = dept_config.get('prefixPath', f"departments/{department.lower()}")
+            
+            # Create metadata key using the configured prefix path
+            metadata_key = f"{prefix_path}/metadata/{os.path.basename(email_key)}.json"
+            s3.put_object(
+                Bucket=destination_bucket_name,
+                Key=metadata_key,
+                Body=json.dumps(metadata, indent=2),
+                ContentType='application/json'
+            )
+            
+            # Check if we should route this email via SES
+            department_email = dept_config.get('email')
+            
+            if department_email and '@' in department_email and 'example.com' not in department_email:
+                try:
+                    # Parse the email
+                    msg = email.message_from_bytes(email_content)
+                    
+                    # Forward the email using SES
+                    forward_email(msg, department_email, department, sender_email)
+                    logger.info(f"Email forwarded to {department_email}")
+                except Exception as e:
+                    logger.error(f"Error forwarding email: {str(e)}")
+            else:
+                logger.info(f"No valid email configured for {department} department, skipping SES routing")
+            
+            logger.info(f"Email successfully routed to {department} prefix")
+            
+        except Exception as e:
+            logger.error(f"Error processing message: {str(e)}")
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Email routing completed')
+    }
+
+def forward_email(original_email, department_email, department, sender_email):
+    """
+    Forwards the email to the department's email address using AWS SES
+    
+    Args:
+        original_email: The original email message
+        department_email: The destination email address
+        department: The department name
+        sender_email: The sender email address
+    """
+    try:
+        # Create a new email
+        subject = f"[{department}] {original_email['Subject'] or 'No Subject'}"
+        
+        # Add original email information
+        original_sender = original_email['From'] or 'Unknown Sender'
+        original_subject = original_email['Subject'] or 'No Subject'
+        
+        # Extract original email content properly
+        original_content = ""
+        if original_email.is_multipart():
+            for part in original_email.walk():
+                if part.get_content_type() == "text/plain":
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        original_content += payload.decode('utf-8', errors='ignore')
+                elif part.get_content_type() == "text/html":
+                    if not original_content:  # Only use HTML if no plain text
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            original_content += payload.decode('utf-8', errors='ignore')
+        else:
+            payload = original_email.get_payload(decode=True)
+            if payload:
+                original_content = payload.decode('utf-8', errors='ignore')
+        
+        # Add a note about the classification
+        note = f"""
+This email has been automatically classified as a {department} department invoice.
+
+Original sender: {original_sender}
+Original subject: {original_subject}
+
+--- Original Email Content ---
+{original_content}
+
+---
+This message was automatically processed by the AWS BDA Invoice Classification System.
+        """
+        
+        # Initialize SES client
+        ses = boto3.client('ses')
+        
+        # Create a new email with attachments using send_raw_email
+        msg = MIMEMultipart()
+        msg['From'] = sender_email
+        msg['To'] = department_email
+        msg['Subject'] = subject
+        
+        # Add the body
+        msg.attach(MIMEText(note, 'plain', 'utf-8'))
+        
+        # Add original attachments if they exist
+        if original_email.is_multipart():
+            for part in original_email.walk():
+                if part.get_content_disposition() == 'attachment':
+                    filename = part.get_filename()
+                    if filename:
+                        attachment = MIMEApplication(
+                            part.get_payload(decode=True),
+                            _subtype=part.get_content_subtype() or 'octet-stream'
+                        )
+                        attachment.add_header('Content-Disposition', 'attachment', filename=filename)
+                        msg.attach(attachment)
+                        logger.info(f"Added attachment: {filename}")
+        
+        # Send the email using SES raw email
+        ses.send_raw_email(
+            Source=sender_email,
+            Destinations=[department_email],
+            RawMessage={
+                'Data': msg.as_string()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error forwarding email: {str(e)}")
+        raise

@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Caching Demo - Amazon Bedrock Optimization</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header Section -->
+        <header class="demo-header">
+            <h1>Prompt Caching Demo</h1>
+            <p class="subtitle">Learn Amazon Bedrock prompt caching best practices through interactive demonstrations</p>
+            <div class="demo-info">
+                <span class="info-badge">Advanced Generative AI Development on AWS</span>
+                <span class="info-badge">Cost Optimization & Performance</span>
+            </div>
+        </header>
+
+        <!-- Educational Information Panel -->
+        <section class="educational-panel">
+            <div class="section-header">
+                <h2>🎓 Learning Objectives</h2>
+                <p class="section-description">Key concepts demonstrated by this system</p>
+            </div>
+            
+            <div class="learning-objectives">
+                <div class="objective-card">
+                    <div class="objective-icon">💾</div>
+                    <h3>Prompt Caching</h3>
+                    <p>Cache large prompt prefixes to reduce latency and costs for repeated contexts</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">⚡</div>
+                    <h3>Performance Optimization</h3>
+                    <p>Observe real-time token reduction and latency improvements with cache hits</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">💰</div>
+                    <h3>Cost Savings</h3>
+                    <p>Understand cache pricing: reduced rates for cache reads, premium for cache writes</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">🏗️</div>
+                    <h3>Serverless Architecture</h3>
+                    <p>Complete AWS infrastructure with Lambda, API Gateway, and CloudFront</p>
+                </div>
+            </div>
+            
+            <div class="key-patterns">
+                <h3>🏗️ AWS Services Demonstrated</h3>
+                <div class="pattern-list">
+                    <div class="pattern-item">
+                        <strong>Bedrock Converse API:</strong> Unified interface with prompt caching support
+                        <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html" target="_blank" style="margin-left: 8px; color: #FF9900;">📚 Learn More</a>
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Prompt Caching:</strong> Cache prompt prefixes with 5-minute TTL for cost and latency optimization
+                        <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html" target="_blank" style="margin-left: 8px; color: #FF9900;">📚 Learn More</a>
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Supported Models:</strong> Claude 3.5 Sonnet/Haiku, Claude 3 Opus/Sonnet/Haiku (minimum 1024 tokens)
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Use Cases:</strong> Document Q&A, code analysis, repeated contexts, multi-turn conversations
+                    </div>
+                </div>
+                <div style="margin-top: 16px; padding: 12px; background: #F8F9FA; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                    <strong>💡 Pricing:</strong> Cache writes incur premium pricing. Cache reads receive reduced pricing. Rates vary by model.
+                    See <a href="https://aws.amazon.com/bedrock/pricing/" target="_blank" rel="noopener">AWS Bedrock Pricing</a> for details.
+                    Cache TTL is 5 minutes from last use.
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Interface Section -->
+        <main class="main-interface">
+            <!-- Query Section -->
+            <section class="query-section">
+                <div class="section-header">
+                    <div>
+                        <h2>Ask a Question</h2>
+                        <p class="section-description">Each query includes the full document as context (default: 1997 Amazon shareholder letter). Ask multiple questions to see caching benefits as the same document context is reused.</p>
+                    </div>
+                </div>
+                
+                <div class="query-input-container">
+                    <div class="input-group">
+                        <label for="questionInput">Your Question</label>
+                        <textarea 
+                            id="questionInput" 
+                            class="question-input" 
+                            placeholder="e.g., What is meant by Day 1?"
+                            rows="3"
+                            maxlength="500"
+                        ></textarea>
+                        <div class="char-counter">
+                            <span id="charCount">0</span> / 500 characters
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="documentUpload">Upload Document (Optional)</label>
+                        <div class="file-upload-container">
+                            <input 
+                                type="file" 
+                                id="documentUpload" 
+                                class="file-input" 
+                                accept=".txt,.md,.pdf,.doc,.docx"
+                                style="display: none;"
+                            />
+                            <button type="button" id="uploadBtn" class="upload-btn">
+                                📄 Choose Document
+                            </button>
+                            <span id="fileName" class="file-name">No file selected (using default 1997 Amazon shareholder letter)</span>
+                            <button type="button" id="clearFileBtn" class="clear-file-btn" style="display: none;">
+                                ✕ Clear
+                            </button>
+                        </div>
+                        <div class="upload-info">
+                            <small>Upload your own document to demonstrate caching (max 100KB, .txt or .md recommended). Without an upload, the 1997 Amazon shareholder letter is automatically included as context with every query. Submit multiple queries to see token savings as the cached document context is reused instead of reprocessed.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="modelSelect">Model</label>
+                        <select id="modelSelect" class="model-select">
+                            <option value="amazon.nova-lite-v1:0">Amazon Nova Lite (Cost-effective)</option>
+                            <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">Claude 3.5 Sonnet v2</option>
+                            <option value="anthropic.claude-3-5-haiku-20241022-v1:0">Claude 3.5 Haiku</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-controls">
+                        <button id="submitBtn" class="submit-btn">
+                            <span class="btn-text">Submit Query</span>
+                            <div class="loading-spinner" style="display: none;"></div>
+                        </button>
+                    </div>
+                    
+                    <div id="processingStatus" class="processing-status" style="display: none;">
+                        <div class="status-message">
+                            <div class="status-icon">⏳</div>
+                            <div class="status-text">Processing query with cache comparison (baseline, cache write, cache hit)...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Architecture Diagram Section -->
+            <section class="architecture-section">
+                <div class="section-header">
+                    <div>
+                        <h2>System Architecture</h2>
+                        <p class="section-description">Interactive diagram showing prompt caching workflow</p>
+                    </div>
+                </div>
+                
+                <div class="architecture-container">
+                    <div id="architectureDiagram" class="architecture-diagram">
+                        <!-- SVG will be loaded here -->
+                    </div>
+                    
+                    <!-- Legend -->
+                    <div class="diagram-legend">
+                        <h4>🔍 Interactive Architecture Guide</h4>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E3F2FD; border: 2px solid #2196F3;"></div>
+                                <span>User Interface</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFF3E0; border: 2px solid #FF9800;"></div>
+                                <span>AWS Infrastructure</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFEBEE; border: 2px solid #F44336;"></div>
+                                <span>Lambda Functions</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #F3E5F5; border: 2px solid #9C27B0;"></div>
+                                <span>Bedrock API</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E1F5FE; border: 2px solid #00BCD4;"></div>
+                                <span>Storage (S3)</span>
+                            </div>
+                        </div>
+                        <p class="legend-note">
+                            💡 <strong>Hover over components</strong> to learn about their role in the prompt caching workflow.
+                            <strong>Data flows</strong> show the complete journey from query to cached response.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="response-section" id="resultsSection" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Cache Performance Results</h2>
+                        <p class="section-description">Three-way comparison: Baseline (no cache) → Cache Write → Cache Hit (reading from cache)</p>
+                    </div>
+                </div>
+                
+                <div class="response-container">
+                    <!-- How This Demo Works -->
+                    <div class="demo-explanation" style="background: #E3F2FD; border-left: 4px solid #2196F3; padding: 16px; margin-bottom: 20px; border-radius: 4px;">
+                        <h4 style="margin: 0 0 8px 0; color: #1976D2;">📊 How This Demo Works</h4>
+                        <p style="margin: 0; font-size: 0.9rem; line-height: 1.5;">
+                            Each query makes <strong>three API calls</strong> to demonstrate caching:
+                            <strong>(1) Baseline</strong> without cache,
+                            <strong>(2) Cache Write</strong> to populate the cache, and
+                            <strong>(3) Cache Hit</strong> reading from the just-written cache.
+                            This shows the comparison in a single request. In real usage, you'd see cache hits on <em>subsequent</em> queries with the same document (within the 5-minute TTL).
+                        </p>
+                    </div>
+                    
+                    <!-- Document Eligibility Indicator -->
+                    <div id="documentEligibility" style="display: none; margin-bottom: 20px;"></div>
+                    
+                    <!-- Cache Miss Warning -->
+                    <div id="cacheMissWarning" style="display: none; margin-bottom: 20px;"></div>
+                    
+                    <!-- Metrics Summary -->
+                    <div class="metrics-summary">
+                        <div class="metric-card highlight">
+                            <div class="metric-icon">📉</div>
+                            <div class="metric-content">
+                                <div class="metric-label">Token Reduction</div>
+                                <div class="metric-value" id="tokenReduction">--</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">⚡</div>
+                            <div class="metric-content">
+                                <div class="metric-label">Latency Improvement</div>
+                                <div class="metric-value" id="latencyImprovement">--</div>
+                            </div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-icon">🎯</div>
+                            <div class="metric-content">
+                                <div class="metric-label">Cache Hit Ratio</div>
+                                <div class="metric-value" id="cacheHitRatio">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Comparison -->
+                    <div class="comparison-container">
+                        <div class="comparison-column">
+                            <h3>Baseline (No Cache)</h3>
+                            <div class="comparison-metrics">
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Input Tokens:</span>
+                                    <span class="comparison-value" id="baselineInputTokens">--</span>
+                                </div>
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Output Tokens:</span>
+                                    <span class="comparison-value" id="baselineOutputTokens">--</span>
+                                </div>
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Response Time:</span>
+                                    <span class="comparison-value" id="baselineResponseTime">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="comparison-column">
+                            <h3>Cache Write</h3>
+                            <div class="comparison-metrics">
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Input Tokens:</span>
+                                    <span class="comparison-value" id="cacheWriteInputTokens">--</span>
+                                </div>
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Cache Write Tokens:</span>
+                                    <span class="comparison-value highlight" id="cacheWriteTokens">--</span>
+                                </div>
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Response Time:</span>
+                                    <span class="comparison-value" id="cacheWriteResponseTime">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="comparison-column">
+                            <h3>Cache Hit</h3>
+                            <div class="comparison-metrics">
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Input Tokens:</span>
+                                    <span class="comparison-value success" id="cacheHitInputTokens">--</span>
+                                </div>
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Cache Read Tokens:</span>
+                                    <span class="comparison-value success" id="cacheReadTokens">--</span>
+                                </div>
+                                <div class="comparison-item">
+                                    <span class="comparison-label">Response Time:</span>
+                                    <span class="comparison-value success" id="cacheHitResponseTime">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- AI Response -->
+                    <div class="ai-response">
+                        <div class="ai-response-header">
+                            <h3>AI Response</h3>
+                            <button id="copyResponseBtn" class="copy-btn" style="display: none;" title="Copy response to clipboard">
+                                📋 Copy
+                            </button>
+                        </div>
+                        <div class="response-content" id="aiResponseContent">
+                            <!-- Response will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section class="history-section">
+                <div class="section-header">
+                    <div>
+                        <h2>Query History</h2>
+                        <p class="section-description">Recent queries and their cache performance</p>
+                    </div>
+                    <button id="clearHistory" class="clear-btn">Clear History</button>
+                </div>
+                
+                <div class="history-container">
+                    <div id="historyList" class="history-list">
+                        <div class="history-empty">
+                            <p>No queries yet. Submit a question above to get started.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="demo-footer">
+            <p>Educational demonstration of Amazon Bedrock prompt caching optimization</p>
+            <p>Built with AWS CDK, Lambda, API Gateway, CloudFront, and Bedrock Converse API</p>
+            <div class="kiro-badge">
+                <a href="https://kiro.dev" target="_blank" rel="noopener noreferrer" class="kiro-link">
+                    <img src="kiro-icon.svg" alt="Kiro" class="kiro-icon">
+                    <span class="kiro-text">Demo built with Kiro</span>
+                </a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Tooltip Container for SVG -->
+    <div id="svgTooltip" class="svg-tooltip"></div>
+
+    <!-- API Configuration - Injected at deployment time -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Load SVG diagram
+        fetch('architecture-diagram.svg')
+            .then(response => response.text())
+            .then(svgContent => {
+                document.getElementById('architectureDiagram').innerHTML = svgContent;
+                
+                // Add enhanced tooltip functionality
+                const tooltip = document.getElementById('svgTooltip');
+                const tooltipElements = document.querySelectorAll('[data-tooltip]');
+                
+                tooltipElements.forEach(element => {
+                    element.addEventListener('mouseenter', (e) => {
+                        const tooltipText = element.getAttribute('data-tooltip');
+                        
+                        // Decode HTML entities and format the text
+                        const formattedText = tooltipText
+                            .replace(/&#10;/g, '\n')
+                            .trim();
+                        
+                        tooltip.textContent = formattedText;
+                        tooltip.style.display = 'block';
+                        
+                        // Position tooltip
+                        const rect = element.getBoundingClientRect();
+                        tooltip.style.left = (e.pageX + 15) + 'px';
+                        tooltip.style.top = (e.pageY + 15) + 'px';
+                    });
+                    
+                    element.addEventListener('mousemove', (e) => {
+                        // Update position as mouse moves
+                        tooltip.style.left = (e.pageX + 15) + 'px';
+                        tooltip.style.top = (e.pageY + 15) + 'px';
+                        
+                        // Keep tooltip on screen
+                        const tooltipRect = tooltip.getBoundingClientRect();
+                        const windowWidth = window.innerWidth;
+                        const windowHeight = window.innerHeight;
+                        
+                        // Adjust if tooltip goes off right edge
+                        if (tooltipRect.right > windowWidth - 10) {
+                            tooltip.style.left = (e.pageX - tooltipRect.width - 15) + 'px';
+                        }
+                        
+                        // Adjust if tooltip goes off bottom edge
+                        if (tooltipRect.bottom > windowHeight - 10) {
+                            tooltip.style.top = (e.pageY - tooltipRect.height - 15) + 'px';
+                        }
+                    });
+                    
+                    element.addEventListener('mouseleave', () => {
+                        tooltip.style.display = 'none';
+                    });
+                });
+            })
+            .catch(error => {
+                console.error('Error loading SVG diagram:', error);
+                document.getElementById('architectureDiagram').innerHTML = 
+                    '<p style="text-align: center; color: #666; padding: 40px;">Architecture diagram could not be loaded.</p>';
+            });
+    </script>
+</body>
+</html>

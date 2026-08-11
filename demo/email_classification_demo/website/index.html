@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Classification Demo - Amazon Bedrock Data Automation</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header Section -->
+        <header class="demo-header">
+            <h1>Email Classification Demo</h1>
+            <p class="subtitle">Automated invoice classification using Amazon Bedrock Data Automation</p>
+            <div class="demo-info">
+                <span class="info-badge">Advanced Generative AI Development on AWS</span>
+                <span class="info-badge">Advanced Data Processing for Foundation Models</span>
+            </div>
+        </header>
+
+        <!-- Educational Information Panel -->
+        <section class="educational-panel">
+            <div class="section-header">
+                <h2>🎓 Learning Objectives</h2>
+                <p class="section-description">Key concepts demonstrated by this system</p>
+            </div>
+            
+            <div class="learning-objectives">
+                <div class="objective-card">
+                    <div class="objective-icon">📄</div>
+                    <h3>Document Processing</h3>
+                    <p>Extract structured data from PDF invoices using Amazon Bedrock Data Automation (BDA)</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">🤖</div>
+                    <h3>AI Classification</h3>
+                    <p>Automatically classify invoices into departments using Bedrock Converse API with Nova models</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">⚡</div>
+                    <h3>Event-Driven Architecture</h3>
+                    <p>Serverless workflow orchestration with S3 events, Lambda, and Step Functions</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">📊</div>
+                    <h3>Infrastructure as Code</h3>
+                    <p>Complete AWS infrastructure defined and deployed using AWS CDK (Python)</p>
+                </div>
+            </div>
+            
+            <div class="key-patterns">
+                <h3>🏗️ AWS Services Demonstrated</h3>
+                <div class="pattern-list">
+                    <div class="pattern-item">
+                        <strong>Bedrock Data Automation:</strong> Extracts text and structured data from PDF documents
+                        <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/data-automation.html" target="_blank" style="margin-left: 8px; color: #FF9900;">📚 Learn More</a>
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Bedrock Converse API:</strong> Unified interface for foundation model inference
+                        <a href="https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html" target="_blank" style="margin-left: 8px; color: #FF9900;">📚 Learn More</a>
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Step Functions:</strong> Orchestrates asynchronous BDA completion workflow
+                        <a href="https://docs.aws.amazon.com/step-functions/latest/dg/welcome.html" target="_blank" style="margin-left: 8px; color: #FF9900;">📚 Learn More</a>
+                    </div>
+                    <div class="pattern-item">
+                        <strong>AWS CDK:</strong> Infrastructure as code with Python for reproducible deployments
+                        <a href="https://docs.aws.amazon.com/cdk/v2/guide/home.html" target="_blank" style="margin-left: 8px; color: #FF9900;">📚 Learn More</a>
+                    </div>
+                </div>
+                <div style="margin-top: 16px; padding: 12px; background: #F8F9FA; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                    <strong>🔗 BDA Management Console:</strong> 
+                    <a href="https://us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/bda/projects" target="_blank" style="color: #FF9900; text-decoration: none;">
+                        us-east-1.console.aws.amazon.com/bedrock/home?region=us-east-1#/bda/projects
+                    </a>
+                    <span style="font-size: 0.75rem; color: #999; margin-left: 8px;">(authentication required)</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Interface Section -->
+        <main class="main-interface">
+            <!-- Upload Section -->
+            <section class="query-section">
+                <div class="section-header">
+                    <div>
+                        <h2>Upload Email File</h2>
+                        <p class="section-description">Upload EML files containing invoice attachments for automatic classification</p>
+                    </div>
+                </div>
+                
+                <div class="query-input-container">
+                    <div id="dropZone" class="drop-zone">
+                        <div class="drop-zone-content">
+                            <div class="upload-icon">📧</div>
+                            <h3>Drag & Drop EML File Here</h3>
+                            <p>or click to browse</p>
+                            <input type="file" id="fileInput" accept=".eml" style="display: none;">
+                            <button id="browseBtn" class="browse-btn">Browse Files</button>
+                        </div>
+                        <div id="filePreview" class="file-preview" style="display: none;">
+                            <div class="file-info">
+                                <div class="file-icon">📄</div>
+                                <div class="file-details">
+                                    <div class="file-name" id="fileName"></div>
+                                    <div class="file-metadata">
+                                        <span id="fileSize"></span>
+                                        <span id="fileSender"></span>
+                                        <span id="fileSubject"></span>
+                                    </div>
+                                </div>
+                                <button id="removeFile" class="remove-file-btn">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="input-controls">
+                        <button id="uploadBtn" class="submit-btn" disabled>
+                            <span class="btn-text">Upload & Classify</span>
+                            <div class="loading-spinner" style="display: none;"></div>
+                        </button>
+                    </div>
+                    <div id="uploadProgress" class="upload-progress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-status" id="progressStatus">Uploading...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Architecture Diagram Section -->
+            <section class="architecture-section">
+                <div class="section-header">
+                    <div>
+                        <h2>System Architecture</h2>
+                        <p class="section-description">Interactive diagram showing email classification workflow</p>
+                    </div>
+                </div>
+                
+                <div class="architecture-container">
+                    <div id="architectureDiagram" class="architecture-diagram">
+                        <!-- SVG will be loaded here -->
+                    </div>
+                    
+                    <!-- Legend -->
+                    <div class="diagram-legend">
+                        <h4>🔍 Interactive Architecture Guide</h4>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E3F2FD; border: 2px solid #2196F3;"></div>
+                                <span>User Interface</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFF3E0; border: 2px solid #FF9800;"></div>
+                                <span>AWS Infrastructure</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFEBEE; border: 2px solid #F44336;"></div>
+                                <span>Lambda Functions</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #F3E5F5; border: 2px solid #9C27B0;"></div>
+                                <span>AI/ML Services</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E1F5FE; border: 2px solid #00BCD4;"></div>
+                                <span>Storage (S3)</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E8F5E8; border: 2px solid #4CAF50;"></div>
+                                <span>Organization</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #F0F4C3; border: 2px solid #827717;"></div>
+                                <span>Monitoring</span>
+                            </div>
+                        </div>
+                        <p class="legend-note">
+                            💡 <strong>Hover over components</strong> to learn about their role in the email classification workflow.
+                            <strong>Data flows</strong> show the complete journey from upload to department routing.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section class="response-section" id="resultsSection" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <h2>Classification Result</h2>
+                        <p class="section-description">Email successfully classified and routed to department</p>
+                    </div>
+                </div>
+                
+                <div class="response-container">
+                    <div class="response-metadata">
+                        <div class="metadata-item">
+                            <span class="metadata-label">Department:</span>
+                            <span class="metadata-value" id="resultDepartment">--</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Processing Time:</span>
+                            <span class="metadata-value" id="resultProcessingTime">--</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Timestamp:</span>
+                            <span class="metadata-value" id="resultTimestamp">--</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Upload ID:</span>
+                            <span class="metadata-value" id="resultUploadId">--</span>
+                        </div>
+                    </div>
+                    
+                    <div class="response-content">
+                        <div class="success-message">
+                            <div class="success-icon">✓</div>
+                            <div class="success-text">
+                                <h3>Email Successfully Classified</h3>
+                                <p id="resultMessage">Your email has been processed and routed to the appropriate department.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Department View Section -->
+            <section class="provider-status-section">
+                <div class="section-header">
+                    <div>
+                        <h2>Department View</h2>
+                        <p class="section-description">Browse classified emails organized by department</p>
+                    </div>
+                </div>
+                
+                <div class="department-tabs">
+                    <button class="department-tab active" data-department="finance">
+                        Finance <span class="email-count" id="financeCount">0</span>
+                    </button>
+                    <button class="department-tab" data-department="it">
+                        IT <span class="email-count" id="itCount">0</span>
+                    </button>
+                    <button class="department-tab" data-department="hr">
+                        HR <span class="email-count" id="hrCount">0</span>
+                    </button>
+                    <button class="department-tab" data-department="operations">
+                        Operations <span class="email-count" id="operationsCount">0</span>
+                    </button>
+                    <button class="department-tab" data-department="marketing">
+                        Marketing <span class="email-count" id="marketingCount">0</span>
+                    </button>
+                </div>
+
+                <div class="email-list-container">
+                    <div id="emailList" class="email-list">
+                        <div class="email-list-empty">
+                            <p>No emails in this department yet. Upload an EML file to get started.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section class="history-section">
+                <div class="section-header">
+                    <div>
+                        <h2>Upload History</h2>
+                        <p class="section-description">Recent uploads and classification results</p>
+                    </div>
+                    <button id="clearHistory" class="clear-btn">Clear History</button>
+                </div>
+                
+                <div class="history-container">
+                    <div id="historyList" class="history-list">
+                        <div class="history-empty">
+                            <p>No uploads yet. Start by uploading an EML file above.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Footer -->
+        <footer class="demo-footer">
+            <p>Educational demonstration of serverless email classification with Amazon Bedrock</p>
+            <p>Built with AWS CDK, Lambda, S3, Bedrock Data Automation, and Step Functions</p>
+            <div class="kiro-badge">
+                <a href="https://kiro.dev" target="_blank" rel="noopener noreferrer" class="kiro-link">
+                    <img src="kiro-icon.svg" alt="Kiro" class="kiro-icon">
+                    <span class="kiro-text">Demo built with Kiro</span>
+                </a>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Tooltip Container for SVG -->
+    <div id="svgTooltip" style="display: none; position: fixed; background: #232F3E; color: white; padding: 12px 16px; border-radius: 8px; font-size: 0.85rem; max-width: 300px; z-index: 1000; pointer-events: none; box-shadow: 0 4px 8px rgba(0,0,0,0.15);"></div>
+
+    <!-- API Configuration - Injected at deployment time -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Load SVG diagram
+        fetch('architecture-diagram.svg')
+            .then(response => response.text())
+            .then(svgContent => {
+                document.getElementById('architectureDiagram').innerHTML = svgContent;
+                
+                // Add tooltip functionality
+                const tooltip = document.getElementById('svgTooltip');
+                const tooltipElements = document.querySelectorAll('[data-tooltip]');
+                
+                tooltipElements.forEach(element => {
+                    element.addEventListener('mouseenter', (e) => {
+                        const tooltipText = element.getAttribute('data-tooltip');
+                        tooltip.textContent = tooltipText;
+                        tooltip.style.display = 'block';
+                    });
+                    
+                    element.addEventListener('mousemove', (e) => {
+                        tooltip.style.left = (e.pageX + 15) + 'px';
+                        tooltip.style.top = (e.pageY + 15) + 'px';
+                    });
+                    
+                    element.addEventListener('mouseleave', () => {
+                        tooltip.style.display = 'none';
+                    });
+                });
+            })
+            .catch(error => {
+                console.error('Error loading SVG diagram:', error);
+                document.getElementById('architectureDiagram').innerHTML = 
+                    '<p style="text-align: center; color: #666; padding: 40px;">Architecture diagram could not be loaded.</p>';
+            });
+    </script>
+</body>
+</html>

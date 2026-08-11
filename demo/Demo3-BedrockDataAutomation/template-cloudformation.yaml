@@ -1,0 +1,319 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Invoice Classification and Routing System using AWS Bedrock - FIXED v2
+
+Parameters:
+  InboxBucketName:
+    Type: String
+    Default: invoice-inbox-bda-workshop
+  DestinationBucketName:
+    Type: String
+    Default: invoice-destination-bda-workshop
+  BedrockModelId:
+    Type: String
+    Default: 'amazon.nova-lite-v1:0'
+  ParticipantEmail:
+    Type: String
+    Default: participant@example.com
+
+Resources:
+  # S3 Buckets
+  DestinationBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${DestinationBucketName}-${AWS::AccountId}-${AWS::Region}"
+
+  # SQS Queue
+  EmailRoutingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600
+
+  # IAM Roles
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${InboxBucketName}-${AWS::AccountId}-${AWS::Region}/*"
+                  - !Sub "arn:aws:s3:::${DestinationBucketName}-${AWS::AccountId}-${AWS::Region}/*"
+                  - !Sub "arn:aws:s3:::${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${DestinationBucketName}-${AWS::AccountId}-${AWS::Region}"
+        - PolicyName: SQSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt EmailRoutingQueue.Arn
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: bedrock:*
+                Resource: '*'
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+        - PolicyName: StepFunctionsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: states:StartExecution
+                Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-InvoiceProcessing"
+
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${AWS::StackName}-InvoiceClassifierOrganizerFunction"
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:aws:s3:::${InboxBucketName}-${AWS::AccountId}-${AWS::Region}/*"
+
+  # Lambda Functions
+  EmailProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-EmailProcessorFunction"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 256
+      Environment:
+        Variables:
+          BEDROCK_DATA_AUTOMATION_PROJECT_ID: "6288186c6280"
+          STATE_MACHINE_ARN: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${AWS::StackName}-InvoiceProcessing"
+          CLASSIFIER_FUNCTION_NAME: !Sub "${AWS::StackName}-InvoiceClassifierOrganizerFunction"
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': 'Function created - please update with actual code'
+              }
+
+  InvoiceClassifierOrganizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-InvoiceClassifierOrganizerFunction"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          INBOX_BUCKET: !Sub "${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+          DESTINATION_BUCKET: !Sub "${DestinationBucketName}-${AWS::AccountId}-${AWS::Region}"
+          EMAIL_ROUTING_QUEUE_URL: !Ref EmailRoutingQueue
+          CONFIG_BUCKET_NAME: !Sub "${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+          CONFIG_FILE_KEY: department_config.json
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': 'Function created - please update with actual code'
+              }
+
+  EmailRouterFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-EmailRouterFunction"
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONFIG_BUCKET_NAME: !Sub "${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+          CONFIG_FILE_KEY: department_config.json
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': 'Function created - please update with actual code'
+              }
+
+  # Step Functions State Machine
+  InvoiceProcessingStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub "${AWS::StackName}-InvoiceProcessing"
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Invoice Processing Workflow with BDA",
+          "StartAt": "WaitForBDACompletion",
+          "States": {
+            "WaitForBDACompletion": {
+              "Type": "Wait",
+              "Seconds": 30,
+              "Next": "CheckBDAOutput"
+            },
+            "CheckBDAOutput": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::aws-sdk:s3:listObjectsV2",
+              "Parameters": {
+                "Bucket.$": "$.bucket",
+                "Prefix": "bda-output/"
+              },
+              "ResultPath": "$.s3Result",
+              "Next": "BDAOutputExists"
+            },
+            "BDAOutputExists": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.s3Result.KeyCount",
+                  "NumericGreaterThan": 0,
+                  "Next": "InvokeClassifier"
+                }
+              ],
+              "Default": "WaitForBDACompletion"
+            },
+            "InvokeClassifier": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${AWS::StackName}-InvoiceClassifierOrganizerFunction",
+                "Payload": {
+                  "stepFunctionTrigger": true,
+                  "bucket.$": "$.bucket",
+                  "bdaOutputPrefix": "bda-output/",
+                  "invocationId.$": "$.invocationId",
+                  "emailMetadata.$": "$.emailMetadata"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+
+  # Lambda Permissions
+  EmailProcessorPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref EmailProcessorFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub "arn:aws:s3:::${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+
+  # S3 Bucket with notifications
+  InboxBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: EmailProcessorPermission
+    Properties:
+      BucketName: !Sub "${InboxBucketName}-${AWS::AccountId}-${AWS::Region}"
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: incoming/
+            Function: !GetAtt EmailProcessorFunction.Arn
+
+  # EventBridge Rule
+  BDACompletionRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Trigger when BDA job completes"
+      EventPattern:
+        source:
+          - "aws.bedrock"
+          - "aws.bedrock-agent"
+          - "aws.bedrock-data-automation"
+        detail-type:
+          - "Bedrock Data Automation Job State Change"
+          - "Bedrock Data Automation Invocation State Change"
+          - "Data Automation Job State Change"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt InvoiceClassifierOrganizerFunction.Arn
+          Id: "BDACompletionTarget"
+
+  BDACompletionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref InvoiceClassifierOrganizerFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt BDACompletionRule.Arn
+
+  # SQS Event Source Mapping
+  EmailRouterEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt EmailRoutingQueue.Arn
+      FunctionName: !Ref EmailRouterFunction
+      BatchSize: 10
+
+Outputs:
+  InboxBucketName:
+    Value: !Ref InboxBucket
+  DestinationBucketName:
+    Value: !Ref DestinationBucket
+  EmailProcessorFunction:
+    Value: !GetAtt EmailProcessorFunction.Arn
+  InvoiceClassifierOrganizerFunction:
+    Value: !GetAtt InvoiceClassifierOrganizerFunction.Arn
+  EmailRouterFunction:
+    Value: !GetAtt EmailRouterFunction.Arn
+  EmailRoutingQueueURL:
+    Value: !Ref EmailRoutingQueue

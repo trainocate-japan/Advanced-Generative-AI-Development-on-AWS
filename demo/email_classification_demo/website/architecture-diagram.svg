@@ -1,0 +1,217 @@
+<!-- Interactive SVG Architecture Diagram for Email Classification System -->
+<svg viewBox="0 0 1400 800" xmlns="http://www.w3.org/2000/svg" id="architectureDiagram">
+    <!-- Background -->
+    <rect width="1400" height="800" fill="#FAFAFA" stroke="#E0E0E0" stroke-width="2" rx="10"/>
+    
+    <!-- Title -->
+    <text x="700" y="35" text-anchor="middle" class="diagram-title">
+        Email Classification System - Serverless Architecture
+    </text>
+    
+    <!-- Arrow Markers -->
+    <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+        </marker>
+        <marker id="active-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#4CAF50"/>
+        </marker>
+    </defs>
+    
+    <!-- User Layer -->
+    <g id="user-layer" data-tooltip="User: Uploads EML files containing invoice attachments through the web interface for automatic classification.">
+        <rect x="50" y="70" width="150" height="90" fill="#E3F2FD" stroke="#2196F3" stroke-width="2" rx="8" class="component-box"/>
+        <text x="125" y="100" text-anchor="middle" class="component-title">👤 User</text>
+        <text x="125" y="120" text-anchor="middle" class="component-subtitle">Web Browser</text>
+        <text x="125" y="135" text-anchor="middle" class="component-subtitle">Upload EML File</text>
+    </g>
+    
+    <!-- CloudFront -->
+    <g id="cloudfront-layer" data-tooltip="CloudFront: AWS CDN that hosts the static website and provides fast global access to the email classification interface.">
+        <rect x="250" y="70" width="150" height="90" fill="#FFF3E0" stroke="#FF9800" stroke-width="2" rx="8" class="component-box"/>
+        <text x="325" y="100" text-anchor="middle" class="component-title">☁️ CloudFront</text>
+        <text x="325" y="120" text-anchor="middle" class="component-subtitle">CDN</text>
+        <text x="325" y="135" text-anchor="middle" class="component-subtitle">Static Website</text>
+    </g>
+    
+    <!-- API Gateway -->
+    <g id="api-gateway-layer" data-tooltip="API Gateway: REST API endpoint that receives EML file uploads and triggers the processing pipeline.">
+        <rect x="450" y="70" width="150" height="90" fill="#E8F5E8" stroke="#4CAF50" stroke-width="2" rx="8" class="component-box"/>
+        <text x="525" y="100" text-anchor="middle" class="component-title">🌐 API Gateway</text>
+        <text x="525" y="120" text-anchor="middle" class="component-subtitle">POST /upload</text>
+        <text x="525" y="135" text-anchor="middle" class="component-subtitle">REST API</text>
+    </g>
+    
+    <!-- Upload Handler Lambda -->
+    <g id="upload-handler-layer" data-tooltip="Upload Handler: Lambda function that validates EML files and stores them in the S3 inbox bucket.">
+        <rect x="650" y="70" width="150" height="90" fill="#FFEBEE" stroke="#F44336" stroke-width="2" rx="8" class="component-box"/>
+        <text x="725" y="95" text-anchor="middle" class="component-title">⚡ Upload Handler</text>
+        <text x="725" y="115" text-anchor="middle" class="component-subtitle">Lambda Function</text>
+        <text x="725" y="130" text-anchor="middle" class="component-subtitle">Validate & Store</text>
+        <text x="725" y="145" text-anchor="middle" class="component-subtitle">EML Files</text>
+    </g>
+    
+    <!-- S3 Inbox Bucket -->
+    <g id="s3-inbox-layer" data-tooltip="S3 Inbox: Storage bucket for incoming EML files. ObjectCreated events trigger the email processor.">
+        <rect x="850" y="70" width="150" height="90" fill="#E1F5FE" stroke="#00BCD4" stroke-width="2" rx="8" class="component-box"/>
+        <text x="925" y="100" text-anchor="middle" class="component-title">🗄️ S3 Inbox</text>
+        <text x="925" y="120" text-anchor="middle" class="component-subtitle">incoming/</text>
+        <text x="925" y="135" text-anchor="middle" class="component-subtitle">EML Storage</text>
+    </g>
+    
+    <!-- Email Processor Lambda -->
+    <g id="email-processor-layer" data-tooltip="Email Processor: Extracts PDF attachments from emails and invokes Bedrock Data Automation for text extraction.">
+        <rect x="850" y="210" width="150" height="110" fill="#FFEBEE" stroke="#F44336" stroke-width="2" rx="8" class="component-box"/>
+        <text x="925" y="240" text-anchor="middle" class="component-title">⚡ Email Processor</text>
+        <text x="925" y="260" text-anchor="middle" class="component-subtitle">Lambda Function</text>
+        <text x="925" y="275" text-anchor="middle" class="component-subtitle">Extract PDFs</text>
+        <text x="925" y="290" text-anchor="middle" class="component-subtitle">Invoke BDA</text>
+        <text x="925" y="305" text-anchor="middle" class="component-subtitle">Start Workflow</text>
+    </g>
+    
+    <!-- Bedrock Data Automation -->
+    <g id="bda-layer" data-tooltip="Bedrock Data Automation: AWS service that extracts text and structured data from PDF invoice attachments.">
+        <rect x="650" y="210" width="150" height="110" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2" rx="8" class="component-box"/>
+        <text x="725" y="240" text-anchor="middle" class="component-title">🤖 Bedrock Data</text>
+        <text x="725" y="260" text-anchor="middle" class="component-title">Automation</text>
+        <text x="725" y="280" text-anchor="middle" class="component-subtitle">Extract Text</text>
+        <text x="725" y="295" text-anchor="middle" class="component-subtitle">from PDFs</text>
+        <text x="725" y="310" text-anchor="middle" class="component-subtitle">Document AI</text>
+    </g>
+    
+    <!-- Step Functions -->
+    <g id="step-functions-layer" data-tooltip="Step Functions: Orchestrates the classification workflow, waiting for BDA completion before invoking the classifier.">
+        <rect x="450" y="210" width="150" height="110" fill="#FFF3E0" stroke="#FF9800" stroke-width="2" rx="8" class="component-box"/>
+        <text x="525" y="240" text-anchor="middle" class="component-title">🔄 Step Functions</text>
+        <text x="525" y="260" text-anchor="middle" class="component-subtitle">State Machine</text>
+        <text x="525" y="275" text-anchor="middle" class="component-subtitle">Orchestration</text>
+        <text x="525" y="290" text-anchor="middle" class="component-subtitle">Wait & Check</text>
+        <text x="525" y="305" text-anchor="middle" class="component-subtitle">BDA Output</text>
+    </g>
+    
+    <!-- Invoice Classifier Lambda -->
+    <g id="classifier-layer" data-tooltip="Invoice Classifier: Uses Bedrock Converse API to classify invoices into departments based on extracted content.">
+        <rect x="250" y="210" width="150" height="110" fill="#FFEBEE" stroke="#F44336" stroke-width="2" rx="8" class="component-box"/>
+        <text x="325" y="235" text-anchor="middle" class="component-title">⚡ Invoice</text>
+        <text x="325" y="255" text-anchor="middle" class="component-title">Classifier</text>
+        <text x="325" y="275" text-anchor="middle" class="component-subtitle">Lambda Function</text>
+        <text x="325" y="290" text-anchor="middle" class="component-subtitle">Bedrock Converse</text>
+        <text x="325" y="305" text-anchor="middle" class="component-subtitle">Classification</text>
+    </g>
+    
+    <!-- S3 Destination Bucket -->
+    <g id="s3-destination-layer" data-tooltip="S3 Destination: Storage bucket where classified emails are organized by department prefix.">
+        <rect x="50" y="210" width="150" height="110" fill="#E1F5FE" stroke="#00BCD4" stroke-width="2" rx="8" class="component-box"/>
+        <text x="125" y="240" text-anchor="middle" class="component-title">🗄️ S3 Destination</text>
+        <text x="125" y="260" text-anchor="middle" class="component-subtitle">departments/</text>
+        <text x="125" y="275" text-anchor="middle" class="component-subtitle">Organized by</text>
+        <text x="125" y="290" text-anchor="middle" class="component-subtitle">Department</text>
+        <text x="125" y="305" text-anchor="middle" class="component-subtitle">+ Metadata</text>
+    </g>
+    
+    <!-- Department Folders -->
+    <g id="departments-layer" data-tooltip="Department Folders: Emails are automatically routed to Finance, IT, HR, Operations, or Marketing based on classification.">
+        <rect x="50" y="370" width="600" height="140" fill="#E8F5E8" stroke="#4CAF50" stroke-width="2" rx="8" class="component-box"/>
+        <text x="350" y="400" text-anchor="middle" class="component-title">📁 Department Folders</text>
+        
+        <!-- Individual Department Boxes -->
+        <g id="dept-boxes">
+            <rect x="70" y="420" width="100" height="60" fill="#FFFFFF" stroke="#4CAF50" stroke-width="1.5" rx="4"/>
+            <text x="120" y="445" text-anchor="middle" class="component-subtitle">💰 Finance</text>
+            <text x="120" y="460" text-anchor="middle" style="font-size: 9px; fill: #666;">Invoices</text>
+            
+            <rect x="190" y="420" width="100" height="60" fill="#FFFFFF" stroke="#4CAF50" stroke-width="1.5" rx="4"/>
+            <text x="240" y="445" text-anchor="middle" class="component-subtitle">💻 IT</text>
+            <text x="240" y="460" text-anchor="middle" style="font-size: 9px; fill: #666;">Tech</text>
+            
+            <rect x="310" y="420" width="100" height="60" fill="#FFFFFF" stroke="#4CAF50" stroke-width="1.5" rx="4"/>
+            <text x="360" y="445" text-anchor="middle" class="component-subtitle">👥 HR</text>
+            <text x="360" y="460" text-anchor="middle" style="font-size: 9px; fill: #666;">People</text>
+            
+            <rect x="430" y="420" width="100" height="60" fill="#FFFFFF" stroke="#4CAF50" stroke-width="1.5" rx="4"/>
+            <text x="480" y="445" text-anchor="middle" class="component-subtitle">⚙️ Operations</text>
+            <text x="480" y="460" text-anchor="middle" style="font-size: 9px; fill: #666;">Ops</text>
+            
+            <rect x="550" y="420" width="100" height="60" fill="#FFFFFF" stroke="#4CAF50" stroke-width="1.5" rx="4"/>
+            <text x="600" y="445" text-anchor="middle" class="component-subtitle">📢 Marketing</text>
+            <text x="600" y="460" text-anchor="middle" style="font-size: 9px; fill: #666;">Campaigns</text>
+        </g>
+    </g>
+    
+    <!-- Web Display -->
+    <g id="web-display-layer" data-tooltip="Web Display: Frontend interface allows users to browse classified emails organized by department.">
+        <rect x="50" y="560" width="600" height="90" fill="#E3F2FD" stroke="#2196F3" stroke-width="2" rx="8" class="component-box"/>
+        <text x="350" y="590" text-anchor="middle" class="component-title">🖥️ Web Frontend Display</text>
+        <text x="350" y="610" text-anchor="middle" class="component-subtitle">Department View - Browse Classified Emails</text>
+        <text x="350" y="630" text-anchor="middle" class="component-subtitle">Real-time Email List by Department</text>
+    </g>
+    
+    <!-- CloudWatch Monitoring -->
+    <g id="monitoring-layer" data-tooltip="CloudWatch: Monitors all Lambda functions, tracks processing metrics, and provides comprehensive logging.">
+        <rect x="1100" y="210" width="150" height="110" fill="#F0F4C3" stroke="#827717" stroke-width="2" rx="8" class="component-box"/>
+        <text x="1175" y="240" text-anchor="middle" class="component-title">📊 CloudWatch</text>
+        <text x="1175" y="260" text-anchor="middle" class="component-subtitle">Monitoring</text>
+        <text x="1175" y="275" text-anchor="middle" class="component-subtitle">Logging</text>
+        <text x="1175" y="290" text-anchor="middle" class="component-subtitle">Metrics</text>
+        <text x="1175" y="305" text-anchor="middle" class="component-subtitle">Alarms</text>
+    </g>
+    
+    <!-- Data Flow Arrows -->
+    <g id="request-flow" class="flow-arrows">
+        <!-- User to CloudFront -->
+        <line x1="200" y1="115" x2="250" y2="115" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- CloudFront to API Gateway -->
+        <line x1="400" y1="115" x2="450" y2="115" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- API Gateway to Upload Handler -->
+        <line x1="600" y1="115" x2="650" y2="115" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- Upload Handler to S3 Inbox -->
+        <line x1="800" y1="115" x2="850" y2="115" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- S3 Inbox to Email Processor (trigger) -->
+        <line x1="925" y1="160" x2="925" y2="210" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        <text x="940" y="190" style="font-size: 10px; fill: #666;">S3 Event</text>
+        
+        <!-- Email Processor to BDA -->
+        <line x1="850" y1="265" x2="800" y2="265" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- BDA to Step Functions -->
+        <line x1="650" y1="265" x2="600" y2="265" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- Step Functions to Classifier -->
+        <line x1="450" y1="265" x2="400" y2="265" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- Classifier to Destination -->
+        <line x1="250" y1="265" x2="200" y2="265" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- Destination to Departments -->
+        <line x1="125" y1="320" x2="125" y2="370" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        
+        <!-- Departments to Web Display -->
+        <line x1="350" y1="510" x2="350" y2="560" stroke="#666" stroke-width="2.5" marker-end="url(#arrowhead)" class="flow-line"/>
+        <text x="365" y="540" style="font-size: 10px; fill: #666;">API List</text>
+    </g>
+    
+    <!-- Monitoring Connections (dashed lines) -->
+    <g id="monitoring-connections">
+        <line x1="1000" y1="115" x2="1100" y2="220" stroke="#827717" stroke-width="2" stroke-dasharray="5,5"/>
+        <line x1="1000" y1="265" x2="1100" y2="265" stroke="#827717" stroke-width="2" stroke-dasharray="5,5"/>
+        <line x1="600" y1="265" x2="1100" y2="265" stroke="#827717" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+        <line x1="400" y1="265" x2="1100" y2="280" stroke="#827717" stroke-width="2" stroke-dasharray="5,5" opacity="0.5"/>
+    </g>
+    
+    <!-- Flow Labels -->
+    <g id="flow-labels">
+        <text x="225" y="105" text-anchor="middle" style="font-size: 9px; fill: #666;">HTTPS</text>
+        <text x="425" y="105" text-anchor="middle" style="font-size: 9px; fill: #666;">API Call</text>
+        <text x="625" y="105" text-anchor="middle" style="font-size: 9px; fill: #666;">Validate</text>
+        <text x="825" y="105" text-anchor="middle" style="font-size: 9px; fill: #666;">Store</text>
+        <text x="825" y="240" text-anchor="middle" style="font-size: 9px; fill: #666;">PDF</text>
+        <text x="625" y="255" text-anchor="middle" style="font-size: 9px; fill: #666;">Extract</text>
+        <text x="425" y="255" text-anchor="middle" style="font-size: 9px; fill: #666;">Invoke</text>
+        <text x="225" y="255" text-anchor="middle" style="font-size: 9px; fill: #666;">Classify</text>
+        <text x="225" y="345" text-anchor="middle" style="font-size: 9px; fill: #666;">Route</text>
+    </g>
+</svg>

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GenAI Model Selection Demo - Provider-Agnostic Architecture</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header Section -->
+        <header class="demo-header">
+            <h1>GenAI Model Selection Demo</h1>
+            <p class="subtitle">Educational demonstration of provider-agnostic GenAI architecture</p>
+            <div class="demo-info">
+                <span class="info-badge">Advanced Generative AI Development on AWS</span>
+                <span class="info-badge">Module 1: Abstraction Patterns</span>
+            </div>
+        </header>
+
+        <!-- Educational Information Panel -->
+        <section class="educational-panel">
+            <div class="section-header">
+                <h2>🎓 Learning Objectives</h2>
+                <p class="section-description">Key concepts demonstrated by this system</p>
+            </div>
+            
+            <div class="learning-objectives">
+                <div class="objective-card">
+                    <div class="objective-icon">🔄</div>
+                    <h3>Provider Abstraction</h3>
+                    <p>Single interface works identically across multiple AI providers (Anthropic, OpenAI, AWS Nova)</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">🧠</div>
+                    <h3>Intelligent Routing</h3>
+                    <p>System automatically selects optimal provider based on health, performance, and query characteristics</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">🛡️</div>
+                    <h3>Fault Tolerance</h3>
+                    <p>Circuit breakers and failover mechanisms ensure system reliability when providers fail</p>
+                </div>
+                
+                <div class="objective-card">
+                    <div class="objective-icon">📊</div>
+                    <h3>Observability</h3>
+                    <p>Comprehensive monitoring and metrics provide visibility into system behavior and performance</p>
+                </div>
+            </div>
+            
+            <div class="key-patterns">
+                <h3>🏗️ Architecture Patterns Demonstrated</h3>
+                <div class="pattern-list">
+                    <div class="pattern-item">
+                        <strong>Adapter Pattern:</strong> Unified Bedrock Converse API interface abstracts provider differences
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Strategy Pattern:</strong> Multiple routing algorithms for different scenarios
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Circuit Breaker:</strong> Prevents cascade failures when providers are unavailable
+                    </div>
+                    <div class="pattern-item">
+                        <strong>Observer Pattern:</strong> Real-time health monitoring and status updates
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Interface Section -->
+        <main class="main-interface">
+            <!-- Query Input Section -->
+            <section class="query-section">
+                <div class="section-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div>
+                            <h2>Query Interface 
+                                <span class="help-icon" data-tooltip="This interface demonstrates provider-agnostic design - the same interface works identically regardless of which AI provider (Anthropic, OpenAI, or Nova) processes your request.">ℹ️</span>
+                            </h2>
+                            <p class="section-description">Submit queries to experience seamless provider-agnostic interactions</p>
+                        </div>
+                        <button class="code-view-btn" onclick="showCodeModal('query-interface')" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">📝 View Code</button>
+                    </div>
+                </div>
+                
+                <div class="query-input-container">
+                    <textarea 
+                        id="queryInput" 
+                        placeholder="Enter your query here... (e.g., 'Explain the benefits of cloud computing')"
+                        rows="4"
+                        maxlength="2000"
+                    ></textarea>
+                    <div class="input-controls">
+                        <div class="input-options">
+                            <label for="maxTokens">Max Tokens:</label>
+                            <select id="maxTokens">
+                                <option value="500">500</option>
+                                <option value="1000" selected>1000</option>
+                                <option value="2000">2000</option>
+                            </select>
+                            
+                            <label for="temperature">Temperature:</label>
+                            <select id="temperature">
+                                <option value="0.3">0.3 (Focused)</option>
+                                <option value="0.7" selected>0.7 (Balanced)</option>
+                                <option value="1.0">1.0 (Creative)</option>
+                            </select>
+                        </div>
+                        
+                        <button id="submitQuery" class="submit-btn" disabled>
+                            <span class="btn-text">Submit Query</span>
+                            <div class="loading-spinner" style="display: none;"></div>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Provider Status Section -->
+            <section class="provider-status-section">
+                <div class="section-header">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div>
+                            <h2>Provider Status 
+                                <span class="help-icon" data-tooltip="This section shows the health of all three AI providers. Notice how the system automatically routes to healthy providers - this is the abstraction layer in action!">ℹ️</span>
+                            </h2>
+                            <p class="section-description">Real-time status of GenAI providers demonstrating abstraction</p>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <button class="code-view-btn" onclick="showCodeModal('provider-status')" style="background: #667eea; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;">📝 View Code</button>
+                            <button id="toggleAdminPanel" class="admin-toggle" style="margin: 0;">🎓 Instructor Controls</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="provider-grid">
+                    <div class="provider-card" data-provider="anthropic">
+                        <div class="provider-header">
+                            <h3>Anthropic Claude 
+                                <span class="help-icon" data-tooltip="Anthropic's Claude models excel at reasoning and analysis. The system automatically selects the best Claude model (Sonnet for complex tasks, Haiku for speed) based on your query.">ℹ️</span>
+                            </h3>
+                            <div class="status-indicator" data-status="unknown">
+                                <span class="status-dot"></span>
+                                <span class="status-text">Checking...</span>
+                            </div>
+                        </div>
+                        <div class="provider-details">
+                            <p class="model-info">Claude 3 Sonnet</p>
+                            <div class="provider-metrics">
+                                <span class="metric">Avg Latency: <span class="metric-value">--ms</span></span>
+                                <span class="metric">Success Rate: <span class="metric-value">--%</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="provider-card" data-provider="openai">
+                        <div class="provider-header">
+                            <h3>OpenAI GPT 
+                                <span class="help-icon" data-tooltip="OpenAI's GPT OSS 120B model provides strong performance across reasoning, code generation, and creative tasks with excellent reliability.">ℹ️</span>
+                            </h3>
+                            <div class="status-indicator" data-status="unknown">
+                                <span class="status-dot"></span>
+                                <span class="status-text">Checking...</span>
+                            </div>
+                        </div>
+                        <div class="provider-details">
+                            <p class="model-info">GPT OSS 120B</p>
+                            <div class="provider-metrics">
+                                <span class="metric">Avg Latency: <span class="metric-value">--ms</span></span>
+                                <span class="metric">Success Rate: <span class="metric-value">--%</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="provider-card" data-provider="nova">
+                        <div class="provider-header">
+                            <h3>AWS Nova 
+                                <span class="help-icon" data-tooltip="AWS Nova models are optimized for cost-effectiveness and integration with AWS services. Nova Pro for complex tasks, Nova Lite for balanced performance, and Nova Micro for simple queries.">ℹ️</span>
+                            </h3>
+                            <div class="status-indicator" data-status="unknown">
+                                <span class="status-dot"></span>
+                                <span class="status-text">Checking...</span>
+                            </div>
+                        </div>
+                        <div class="provider-details">
+                            <p class="model-info">Nova Pro, Nova Lite, Nova Micro</p>
+                            <div class="provider-metrics">
+                                <span class="metric">Avg Latency: <span class="metric-value">--ms</span></span>
+                                <span class="metric">Success Rate: <span class="metric-value">--%</span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Instructor Controls (Initially Hidden) -->
+                <div class="admin-section" style="display: none; margin-top: 20px;">
+                    <div class="admin-controls">
+                        <div class="control-group">
+                            <h3>Provider Simulation Controls</h3>
+                            <div class="simulation-controls">
+                                <div class="simulation-item">
+                                    <label class="switch">
+                                        <input type="checkbox" id="simulateAnthropicFailure">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="simulation-label">Simulate Anthropic Failure</span>
+                                </div>
+                                <div class="simulation-item">
+                                    <label class="switch">
+                                        <input type="checkbox" id="simulateOpenAIFailure">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="simulation-label">Simulate OpenAI Failure</span>
+                                </div>
+                                <div class="simulation-item">
+                                    <label class="switch">
+                                        <input type="checkbox" id="simulateNovaFailure">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="simulation-label">Simulate Nova Failure</span>
+                                </div>
+                            </div>
+                            <button id="resetSimulations" class="reset-btn">Reset All Simulations</button>
+                            
+                            <div class="simulation-impact">
+                                <h5>📚 What Students Will Observe:</h5>
+                                <ul>
+                                    <li>Automatic failover to healthy providers</li>
+                                    <li>Circuit breaker pattern preventing requests to failed services</li>
+                                    <li>Load redistribution across available providers</li>
+                                    <li>System resilience and graceful degradation</li>
+                                    <li>Real-time status monitoring and alerting</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Response Section -->
+            <section class="response-section" style="display: none;">
+                <div class="section-header">
+                    <h2>Response</h2>
+                    <p class="section-description">GenAI response with transparent provider information</p>
+                </div>
+                
+                <div class="response-container">
+                    <div class="response-metadata">
+                        <div class="metadata-item">
+                            <span class="metadata-label">Provider Used:</span>
+                            <span class="metadata-value" id="responseProvider">--</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Model:</span>
+                            <span class="metadata-value" id="responseModel">--</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Tokens Used:</span>
+                            <span class="metadata-value" id="responseTokens">--</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Latency:</span>
+                            <span class="metadata-value" id="responseLatency">--ms</span>
+                        </div>
+                        <div class="metadata-item">
+                            <span class="metadata-label">Timestamp:</span>
+                            <span class="metadata-value" id="responseTimestamp">--</span>
+                        </div>
+                    </div>
+                    
+                    <div class="response-content">
+                        <div id="responseText" class="response-text"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Metrics Dashboard Section -->
+            <section class="metrics-section">
+                <div class="section-header">
+                    <h2>Session Metrics 
+                        <span class="help-icon" data-tooltip="These metrics show how the system distributes load across providers and maintains performance. Notice how the system balances between providers automatically!">ℹ️</span>
+                    </h2>
+                    <p class="section-description">Real-time performance metrics demonstrating system behavior</p>
+                </div>
+                
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>Total Queries</h3>
+                        <div class="metric-value-large" id="totalQueries">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Average Latency</h3>
+                        <div class="metric-value-large" id="avgLatency">--ms</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Total Tokens</h3>
+                        <div class="metric-value-large" id="totalTokens">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Provider Distribution 
+                            <span class="help-icon" data-tooltip="This shows how queries are distributed across providers. The intelligent routing algorithm considers factors like health, performance, and query characteristics.">ℹ️</span>
+                        </h3>
+                        <div class="provider-distribution" id="providerDistribution">
+                            <div class="distribution-item">
+                                <span class="provider-name">Anthropic:</span>
+                                <span class="provider-count">0</span>
+                            </div>
+                            <div class="distribution-item">
+                                <span class="provider-name">OpenAI:</span>
+                                <span class="provider-count">0</span>
+                            </div>
+                            <div class="distribution-item">
+                                <span class="provider-name">Nova:</span>
+                                <span class="provider-count">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Session History Section -->
+            <section class="history-section">
+                <div class="section-header">
+                    <h2>Session History</h2>
+                    <p class="section-description">Query history for demonstration and analysis</p>
+                    <button id="clearHistory" class="clear-btn">Clear History</button>
+                </div>
+                
+                <div class="history-container">
+                    <div id="historyList" class="history-list">
+                        <div class="history-empty">
+                            <p>No queries submitted yet. Start by entering a query above.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Architecture Diagram Section -->
+        <section class="architecture-section">
+            <div class="section-header">
+                <h2>System Architecture</h2>
+                <p class="section-description">Interactive diagram showing provider-agnostic design patterns</p>
+            </div>
+            
+            <div class="architecture-container">
+                <div id="architectureDiagram" class="architecture-diagram">
+                    <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Background -->
+                        <rect width="1200" height="600" fill="#F8F9FA" stroke="#E0E0E0" stroke-width="2" rx="10"/>
+                        
+                        <!-- Title -->
+                        <text x="600" y="30" text-anchor="middle" class="diagram-title">
+                            GenAI Model Selection Demo - Provider-Agnostic Architecture
+                        </text>
+                        
+                        <!-- Client Layer -->
+                        <g id="client-layer">
+                            <rect x="50" y="80" width="150" height="80" fill="#E3F2FD" stroke="#2196F3" stroke-width="2" rx="8" class="component-box"/>
+                            <text x="125" y="110" text-anchor="middle" class="component-title">Web Frontend</text>
+                            <text x="125" y="130" text-anchor="middle" class="component-subtitle">React/HTML/CSS</text>
+                            <text x="125" y="145" text-anchor="middle" class="component-subtitle">User Interface</text>
+                        </g>
+                        
+                        <!-- CloudFront -->
+                        <g id="cloudfront-layer">
+                            <rect x="300" y="80" width="150" height="80" fill="#FFF3E0" stroke="#FF9800" stroke-width="2" rx="8" class="component-box"/>
+                            <text x="375" y="110" text-anchor="middle" class="component-title">CloudFront</text>
+                            <text x="375" y="130" text-anchor="middle" class="component-subtitle">CDN Distribution</text>
+                            <text x="375" y="145" text-anchor="middle" class="component-subtitle">Global Edge Locations</text>
+                        </g>
+                        
+                        <!-- API Gateway -->
+                        <g id="api-gateway-layer">
+                            <rect x="550" y="80" width="150" height="80" fill="#E8F5E8" stroke="#4CAF50" stroke-width="2" rx="8" class="component-box"/>
+                            <text x="625" y="110" text-anchor="middle" class="component-title">API Gateway</text>
+                            <text x="625" y="130" text-anchor="middle" class="component-subtitle">REST API</text>
+                            <text x="625" y="145" text-anchor="middle" class="component-subtitle">Rate Limiting & Auth</text>
+                        </g>
+                        
+                        <!-- Lambda Router -->
+                        <g id="lambda-router-layer">
+                            <rect x="475" y="220" width="300" height="120" fill="#FFEBEE" stroke="#F44336" stroke-width="2" rx="8" class="component-box"/>
+                            <text x="625" y="250" text-anchor="middle" class="component-title">Lambda Router Engine</text>
+                            <text x="525" y="275" text-anchor="middle" class="component-subtitle">Health Monitor</text>
+                            <text x="625" y="275" text-anchor="middle" class="component-subtitle">Intelligent Router</text>
+                            <text x="725" y="275" text-anchor="middle" class="component-subtitle">Bedrock Adapter</text>
+                            <text x="525" y="295" text-anchor="middle" class="component-detail">Circuit Breaker</text>
+                            <text x="625" y="295" text-anchor="middle" class="component-detail">Load Balancing</text>
+                            <text x="725" y="295" text-anchor="middle" class="component-detail">Unified Interface</text>
+                            <text x="625" y="320" text-anchor="middle" class="component-highlight">Provider-Agnostic Abstraction Layer</text>
+                        </g>
+                        
+                        <!-- Bedrock Service -->
+                        <g id="bedrock-layer">
+                            <rect x="400" y="400" width="400" height="80" fill="#F3E5F5" stroke="#9C27B0" stroke-width="2" rx="8" class="component-box"/>
+                            <text x="600" y="430" text-anchor="middle" class="component-title">AWS Bedrock Converse API</text>
+                            <text x="600" y="450" text-anchor="middle" class="component-subtitle">Unified GenAI Interface</text>
+                            <text x="600" y="465" text-anchor="middle" class="component-subtitle">Single API for All Providers</text>
+                        </g>
+                        
+                        <!-- Provider Services -->
+                        <g id="provider-services">
+                            <!-- Anthropic -->
+                            <g id="anthropic-provider">
+                                <rect x="100" y="520" width="120" height="60" fill="#E1F5FE" stroke="#00BCD4" stroke-width="2" rx="8" class="provider-box"/>
+                                <text x="160" y="545" text-anchor="middle" class="provider-title">Anthropic</text>
+                                <text x="160" y="565" text-anchor="middle" class="provider-subtitle">Claude Models</text>
+                            </g>
+                            
+                            <!-- OpenAI -->
+                            <g id="openai-provider">
+                                <rect x="300" y="520" width="120" height="60" fill="#E8F5E8" stroke="#4CAF50" stroke-width="2" rx="8" class="provider-box"/>
+                                <text x="360" y="545" text-anchor="middle" class="provider-title">OpenAI</text>
+                                <text x="360" y="565" text-anchor="middle" class="provider-subtitle">GPT Models</text>
+                            </g>
+                            
+                            <!-- AWS Nova -->
+                            <g id="nova-provider">
+                                <rect x="500" y="520" width="120" height="60" fill="#FFF3E0" stroke="#FF9800" stroke-width="2" rx="8" class="provider-box"/>
+                                <text x="560" y="545" text-anchor="middle" class="provider-title">AWS Nova</text>
+                                <text x="560" y="565" text-anchor="middle" class="provider-subtitle">Nova Models</text>
+                            </g>
+                        </g>
+                        
+                        <!-- Monitoring -->
+                        <g id="monitoring-layer">
+                            <rect x="900" y="220" width="150" height="120" fill="#F0F4C3" stroke="#827717" stroke-width="2" rx="8" class="component-box"/>
+                            <text x="975" y="250" text-anchor="middle" class="component-title">CloudWatch</text>
+                            <text x="975" y="275" text-anchor="middle" class="component-subtitle">Monitoring</text>
+                            <text x="975" y="295" text-anchor="middle" class="component-subtitle">Logging</text>
+                            <text x="975" y="315" text-anchor="middle" class="component-subtitle">Metrics</text>
+                        </g>
+                        
+                        <!-- Data Flow Arrows -->
+                        <defs>
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+                            </marker>
+                            <marker id="active-arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#4CAF50"/>
+                            </marker>
+                        </defs>
+                        
+                        <!-- Request Flow -->
+                        <g id="request-flow" class="flow-arrows">
+                            <line x1="200" y1="120" x2="300" y2="120" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="flow-line"/>
+                            <line x1="450" y1="120" x2="550" y2="120" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="flow-line"/>
+                            <line x1="625" y1="160" x2="625" y2="220" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="flow-line"/>
+                            <line x1="625" y1="340" x2="600" y2="400" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="flow-line"/>
+                        </g>
+                        
+                        <!-- Provider Connections -->
+                        <g id="provider-connections" class="provider-flows">
+                            <line x1="500" y1="480" x2="160" y2="520" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="provider-line" id="anthropic-line"/>
+                            <line x1="600" y1="480" x2="360" y2="520" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="provider-line" id="meta-line"/>
+                            <line x1="700" y1="480" x2="560" y2="520" stroke="#666" stroke-width="2" marker-end="url(#arrowhead)" class="provider-line" id="nova-line"/>
+                        </g>
+                        
+                        <!-- Monitoring Connection -->
+                        <line x1="775" y1="280" x2="900" y2="280" stroke="#827717" stroke-width="2" marker-end="url(#arrowhead)" stroke-dasharray="5,5"/>
+                        
+                        <!-- Interactive Tooltips (invisible rectangles for hover areas) -->
+                        <rect x="50" y="80" width="150" height="80" fill="transparent" class="tooltip-area" data-tooltip="Web Frontend: User interface built with HTML/CSS/JavaScript. Provides a consistent experience regardless of which AI provider processes requests."/>
+                        <rect x="300" y="80" width="150" height="80" fill="transparent" class="tooltip-area" data-tooltip="CloudFront: AWS CDN service that distributes the web frontend globally for fast loading times and improved user experience."/>
+                        <rect x="550" y="80" width="150" height="80" fill="transparent" class="tooltip-area" data-tooltip="API Gateway: Manages API requests with authentication, rate limiting, and request validation. Provides a single entry point for all client requests."/>
+                        <rect x="475" y="220" width="300" height="120" fill="transparent" class="tooltip-area" data-tooltip="Lambda Router Engine: The core intelligence of the system. Monitors provider health, implements circuit breakers, and routes requests to optimal providers using the unified Bedrock interface."/>
+                        <rect x="400" y="400" width="400" height="80" fill="transparent" class="tooltip-area" data-tooltip="AWS Bedrock Converse API: Unified interface that abstracts differences between AI providers. Single API call format works with Anthropic, OpenAI, and Nova models."/>
+                        <rect x="100" y="520" width="120" height="60" fill="transparent" class="tooltip-area" data-tooltip="Anthropic Claude: Advanced reasoning and analysis capabilities. Models include Claude 3.5 Sonnet for complex tasks and Claude 3 Haiku for speed."/>
+                        <rect x="300" y="520" width="120" height="60" fill="transparent" class="tooltip-area" data-tooltip="OpenAI GPT: GPT OSS 120B model provides strong performance across reasoning, code generation, and creative tasks with excellent reliability."/>
+                        <rect x="500" y="520" width="120" height="60" fill="transparent" class="tooltip-area" data-tooltip="AWS Nova: Cost-effective models optimized for AWS integration. Nova Pro for complex tasks, Nova Lite for balanced performance, Nova Micro for simple queries."/>
+                        <rect x="900" y="220" width="150" height="120" fill="transparent" class="tooltip-area" data-tooltip="CloudWatch: Comprehensive monitoring and logging. Tracks system performance, provider health, routing decisions, and provides real-time dashboards."/>
+                    </svg>
+                    
+                    <!-- Legend -->
+                    <div class="diagram-legend">
+                        <h4>🔍 Interactive Architecture Guide</h4>
+                        <div class="legend-items">
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E3F2FD; border: 2px solid #2196F3;"></div>
+                                <span>Client Layer</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFF3E0; border: 2px solid #FF9800;"></div>
+                                <span>AWS Infrastructure</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #FFEBEE; border: 2px solid #F44336;"></div>
+                                <span>Routing Engine</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #F3E5F5; border: 2px solid #9C27B0;"></div>
+                                <span>Abstraction Layer</span>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color" style="background: #E8F5E8; border: 2px solid #4CAF50;"></div>
+                                <span>AI Providers</span>
+                            </div>
+                        </div>
+                        <p class="legend-note">
+                            💡 <strong>Hover over components</strong> to learn about their role in the provider-agnostic design.
+                            <strong>Active data flows</strong> will be highlighted during query processing.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="demo-footer">
+            <p>Educational demonstration of provider-agnostic architecture patterns</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Code Viewer Modal -->
+    <div id="codeModal" class="code-modal" style="display: none;">
+        <div class="code-modal-content">
+            <div class="code-modal-header">
+                <h2 id="codeModalTitle">Lambda Code</h2>
+                <button class="code-modal-close" onclick="document.getElementById('codeModal').style.display='none'">&times;</button>
+            </div>
+            <div class="code-modal-body">
+                <pre id="codeModalCode"><code></code></pre>
+            </div>
+            <div class="code-modal-footer">
+                <p>💡 This code demonstrates production-ready patterns for GenAI routing and provider abstraction</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

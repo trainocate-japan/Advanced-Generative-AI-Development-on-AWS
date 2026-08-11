@@ -1,0 +1,376 @@
+import json
+import boto3
+import os
+import logging
+import datetime
+import re
+
+# Configure logging
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+# Get region from environment variable or default to current session region
+AWS_REGION = os.environ.get('AWS_REGION', boto3.session.Session().region_name)
+
+# Initialize AWS clients outside of handler function to improve performance
+s3 = boto3.client('s3')
+sqs = boto3.client('sqs')
+bedrock_runtime = boto3.client('bedrock-runtime')
+bda_client = boto3.client("bedrock-data-automation", region_name=AWS_REGION)
+
+# Constants
+OUTPUT_FOLDER_NAME = "bda-output"
+BDA_PROFILE_ID = "us.data-automation-v1"
+
+# Get BDA Project ID
+try:
+    response = bda_client.list_data_automation_projects()
+    BDA_PROJECT_ID = None
+    for project in response["projects"]:
+        if project["projectName"] == "invoice-processing":
+            project_arn = project["projectArn"]
+            BDA_PROJECT_ID = re.search(r'data-automation-project/(.+)$', project_arn).group(1)
+            break
+
+    if not BDA_PROJECT_ID:
+        logger.warning("BDA project 'invoice-processing' not found, will use fallback")
+        BDA_PROJECT_ID = "fallback-project-id"
+except Exception as e:
+    logger.warning(f"Could not retrieve BDA project ID: {str(e)}")
+    BDA_PROJECT_ID = "fallback-project-id"
+
+def lambda_handler(event, context):
+    """
+    Combined Lambda function that handles both:
+    1. Invoice classification using Amazon Bedrock
+    2. Email organization into department-specific folders and SQS notification
+    """
+    logger.info("Invoice classifier and organizer Lambda triggered")
+    logger.info(f"Event: {json.dumps(event, default=str)}")
+    
+    # Log the actual bucket names being used
+    inbox_bucket = os.environ.get('INBOX_BUCKET')
+    destination_bucket = os.environ.get('DESTINATION_BUCKET')
+    logger.info(f"Using bucket names - Inbox: {inbox_bucket}, Destination: {destination_bucket}")
+    
+    # Handle test events
+    if event.get('test'):
+        logger.info("Test event received - Lambda is working!")
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Test successful - Lambda function is working')
+        }
+    
+    try:
+        # Process the BDA completion event directly
+        process_bda_completion(event)
+        
+    except Exception as e:
+        logger.error(f"Error processing BDA completion event: {str(e)}")
+        raise
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Classification processing completed')
+    }
+
+def process_bda_completion(event):
+    """Process a single BDA completion event"""
+    try:
+        # Get configuration from environment variables (using full bucket names)
+        config_bucket = os.environ.get('CONFIG_BUCKET_NAME') # This is the full bucket name
+        config_key = os.environ.get('CONFIG_FILE_KEY', 'department_config.json')
+        inbox_bucket = os.environ.get('INBOX_BUCKET') # This is the full bucket name
+        destination_bucket = os.environ.get('DESTINATION_BUCKET') # This is the full bucket name
+        queue_url = os.environ.get('EMAIL_ROUTING_QUEUE_URL')
+        
+        logger.info(f"Using full bucket names - Config: {config_bucket}, Inbox: {inbox_bucket}, Destination: {destination_bucket}")
+        
+        # Read the configuration file if available
+        departments_config = get_departments_config(s3, config_bucket, config_key)
+        
+        # Initialize variables
+        invoice_data = None
+        email_metadata = {}
+        
+        # Handle Step Functions trigger with BDA output
+        if 'stepFunctionTrigger' in event and 'invocationId' in event:
+            invocation_id = event['invocationId']
+            bucket = event['bucket']
+            bda_prefix = event.get('bdaOutputPrefix', 'bda-output/')
+            logger.info(f"Processing Step Functions trigger for invocation ID: {invocation_id}")
+            
+            # Look for BDA output in S3
+            try:
+                response = s3.list_objects_v2(Bucket=bucket, Prefix=f"{bda_prefix}{invocation_id}")
+                if 'Contents' in response and len(response['Contents']) > 0:
+                    # Find the actual JSON output file
+                    output_key = None
+                    for obj in response['Contents']:
+                        if obj['Key'].endswith('.json') and '.s3_access_check' not in obj['Key']:
+                            output_key = obj['Key']
+                            break
+                    
+                    if output_key:
+                        logger.info(f"Found BDA output at: s3://{bucket}/{output_key}")
+                        
+                        # Get the BDA output from S3
+                        response = s3.get_object(Bucket=bucket, Key=output_key)
+                        bda_output = json.loads(response['Body'].read().decode('utf-8'))
+                        
+                        # Debug: Log the BDA output structure
+                        logger.info(f"BDA output keys: {list(bda_output.keys())}")
+                        logger.info(f"BDA output sample: {str(bda_output)[:500]}...")
+                        
+                        # Extract the invoice text and metadata - try multiple possible keys
+                        invoice_data = (bda_output.get('extractedContent') or 
+                                      bda_output.get('textExtractionResult') or 
+                                      bda_output.get('documentContent') or
+                                      bda_output.get('content') or
+                                      bda_output.get('text') or
+                                      bda_output.get('result') or
+                                      bda_output.get('output'))
+                        
+                        # If still no data, try to extract from nested structures
+                        if not invoice_data and isinstance(bda_output, dict):
+                            for key, value in bda_output.items():
+                                if isinstance(value, (str, dict)) and value:
+                                    invoice_data = value
+                                    logger.info(f"Using data from key: {key}")
+                                    break
+                        
+                        # Use the email metadata from Step Functions
+                        email_metadata = event.get('emailMetadata', {})
+                        
+                        logger.info(f"Successfully loaded BDA output for invocation: {invocation_id}")
+                    else:
+                        logger.warning(f"No JSON output file found for invocation: {invocation_id}")
+                        invoice_data = None
+                        email_metadata = event.get('emailMetadata', {})
+                else:
+                    logger.warning(f"No BDA output found for invocation: {invocation_id}")
+                    invoice_data = None
+                    email_metadata = event.get('emailMetadata', {})
+            except Exception as e:
+                logger.error(f"Error loading BDA output: {str(e)}")
+                invoice_data = None
+                email_metadata = event.get('emailMetadata', {})
+        else:
+            # Handle test events or direct invocation
+            logger.info("No Step Functions trigger found, using test data")
+            invoice_data = "Test invoice data for IT department classification"
+            email_metadata = {
+                'email_key': 'test/sample-email.eml',
+                'sender': 'test@example.com',
+                'subject': 'Test Invoice - IT Equipment'
+            }
+        
+        if not invoice_data:
+            error_msg = "No extracted content found in the event"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+        
+        # Convert to string if it's a dict/object
+        invoice_text = invoice_data if isinstance(invoice_data, str) else json.dumps(invoice_data)
+        
+        logger.info(f"Extracted invoice text: {invoice_text[:200]}...") 
+        
+        # Use Amazon Bedrock for classification
+        model_id = os.environ.get('BEDROCK_MODEL_ID', 'amazon.nova-lite-v1:0')
+        
+        # Prepare the prompt for classification
+        department_list = "\n".join([f"- {dept}" for dept in departments_config.keys()])
+        if not department_list:
+            department_list = "- IT\n- Finance\n- HR\n- Operations"
+        
+        prompt = f"""You are a document classifier. Classify this invoice to the most appropriate department based on its content. For example, if the content includes "IT" and the available departments include IT, return to the result "IT". Return only to the department name, do not return anything else.
+
+Available departments:
+{department_list}
+
+Invoice content:
+{invoice_text[:1000]}
+
+Email subject: {email_metadata.get('subject', 'N/A')}
+Sender: {email_metadata.get('sender', 'N/A')}
+
+Department:"""
+        
+        try:
+            # Call Bedrock for classification using Converse API
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
+            inference_config = {
+                "maxTokens": 100,
+                "temperature": 0
+            }
+            logger.info(f"Calling Bedrock model: {model_id}")
+            response = bedrock_runtime.converse(
+                modelId=model_id,
+                messages=messages,
+                inferenceConfig=inference_config
+            )
+            department = response['output']['message']['content'][0]['text'].strip()
+            
+            logger.info(f"Bedrock classification result: {department}")
+            # Extract department name from potentially verbose response
+            department_names = list(departments_config.keys())
+            for dept in department_names:
+                if dept.lower() in department.lower():
+                    department = dept
+                    break
+            
+        except Exception as e:
+            logger.error(f"Bedrock classification failed: {str(e)}")
+            # Fallback to keyword-based classification
+            logger.info("Using fallback classification")
+            combined_text = f"{invoice_text.lower()} {email_metadata.get('subject', '').lower()}"
+            if 'marketing' in combined_text or 'campaign' in combined_text:
+                department = 'Finance'
+            elif 'warehouse' in combined_text or 'equipment' in combined_text:
+                department = 'Operations'
+            elif 'computer' in combined_text or 'software' in combined_text:
+                department = 'IT'
+            else:
+                department = 'Finance'
+        
+        logger.info(f"Classification result: {department}")
+        
+        # Validate that the department exists in our config
+        if department not in departments_config and department != 'Unknown':
+            logger.warning(f"Department '{department}' not found in config, using 'Operations' instead")
+            department = 'Operations'
+        
+        # ---- Email Organization Logic ----
+        
+        # Get source and destination bucket information
+        source_key = email_metadata.get('email_key', email_metadata.get('emailKey'))
+        
+        if not inbox_bucket or not destination_bucket or not source_key:
+            error_msg = "Inbox bucket, destination bucket, or email key not found"
+            logger.error(error_msg)
+            raise Exception(error_msg)
+        
+        # Use standard prefix structure: departments/{department_name}/
+        prefix_structure = f"departments/{department.lower()}"
+            
+        # Ensure the prefix exists in destination bucket
+        try:
+            # Create the department prefix
+            s3.put_object(
+                Bucket=destination_bucket,
+                Key=f"{prefix_structure}/",
+                Body=''
+            )
+            
+            # Also create the metadata prefix
+            s3.put_object(
+                Bucket=destination_bucket,
+                Key=f"{prefix_structure}/metadata/",
+                Body=''
+            )
+        except Exception as e:
+            logger.warning(f"Could not create prefix {prefix_structure}: {str(e)}")
+        
+        # Generate the target key
+        target_key = f"{prefix_structure}/{os.path.basename(source_key)}"
+        
+        logger.info(f"Moving email from {inbox_bucket}/{source_key} to {destination_bucket}/{target_key}")
+        
+        # Check if source file exists before copying
+        try:
+            s3.head_object(Bucket=inbox_bucket, Key=source_key)
+            logger.info(f"Source file exists: {inbox_bucket}/{source_key}")
+        except Exception as e:
+            logger.warning(f"Source file does not exist: {inbox_bucket}/{source_key}. Creating test file for demonstration.")
+            # For test events, create a dummy email file
+            test_email_content = f"""From: test@example.com
+To: invoices@company.com
+Subject: Test Invoice - {department} Equipment
+Date: {datetime.datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')}
+
+This is a test email with a {department} invoice attachment.
+Classified as: {department}
+"""
+            s3.put_object(
+                Bucket=inbox_bucket,
+                Key=source_key,
+                Body=test_email_content,
+                ContentType='message/rfc822'
+            )
+            logger.info(f"Created test email file: {inbox_bucket}/{source_key}")
+        
+        # Copy the email from inbox to destination bucket
+        s3.copy_object(
+            Bucket=destination_bucket,
+            CopySource={'Bucket': inbox_bucket, 'Key': source_key},
+            Key=target_key
+        )
+        
+        # Send message to SQS for email routing
+        if queue_url:
+            message = {
+                'department': department,
+                'emailKey': target_key,
+                'originalEmailKey': source_key,
+                'inboxBucket': inbox_bucket,
+                'destinationBucket': destination_bucket,
+                'metadata': email_metadata,
+                'timestamp': datetime.datetime.now().isoformat()
+            }
+            
+            logger.info(f"Sending message to routing queue: {json.dumps(message)}")
+            sqs.send_message(
+                QueueUrl=queue_url,
+                MessageBody=json.dumps(message)
+            )
+        
+        logger.info(f"Successfully processed BDA completion for department: {department}")
+        
+    except Exception as e:
+        logger.error(f"Error processing BDA completion: {str(e)}")
+        raise
+
+def get_departments_config(s3_client, bucket, key):
+    """Read department configuration from S3"""
+    departments_config = {}
+    try:
+        if bucket and key:
+            logger.info(f"Reading configuration from s3://{bucket}/{key}")
+            response = s3_client.get_object(Bucket=bucket, Key=key)
+            config = json.loads(response['Body'].read().decode('utf-8'))
+            departments_config = {dept['name']: dept for dept in config.get('departments', [])}
+            logger.info(f"Found {len(departments_config)} departments in configuration")
+        else:
+            logger.warning("Missing bucket or key for department configuration")
+    except Exception as e:
+        logger.warning(f"Could not read department configuration: {str(e)}")
+        # Use default departments if config can't be read
+        departments_config = {
+            'IT': {'name': 'IT', 'prefixPath': 'departments/it'},
+            'Finance': {'name': 'Finance', 'prefixPath': 'departments/finance'},
+            'HR': {'name': 'HR', 'prefixPath': 'departments/hr'},
+            'Operations': {'name': 'Operations', 'prefixPath': 'departments/operations'}
+        }
+    return departments_config
+
+def parse_s3_uri(uri):
+    """Parse an S3 URI into bucket and key"""
+    if not uri.startswith('s3://'):
+        raise ValueError(f"Invalid S3 URI: {uri}")
+    
+    path = uri[5:]  # Remove 's3://'
+    parts = path.split('/', 1)
+    
+    if len(parts) == 1:
+        return parts[0], ''
+    else:
+        return parts[0], parts[1]

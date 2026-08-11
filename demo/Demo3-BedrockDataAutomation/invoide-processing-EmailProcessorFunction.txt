@@ -1,0 +1,305 @@
+from email import policy
+import json
+import boto3
+import os
+import email
+import uuid
+import logging
+from datetime import datetime, timezone
+import traceback
+import re
+import unicodedata
+
+# Get region from environment variable or default to current session region
+AWS_REGION = os.environ.get('AWS_REGION', boto3.session.Session().region_name)
+
+# Initialize AWS clients outside of handler function to improve performance
+s3 = boto3.client("s3")
+bedrock_data_automation = boto3.client("bedrock-data-automation-runtime", region_name=AWS_REGION)
+bda_client = boto3.client("bedrock-data-automation", region_name=AWS_REGION)
+lambda_client = boto3.client("lambda", region_name=AWS_REGION)
+stepfunctions_client = boto3.client("stepfunctions", region_name=AWS_REGION)
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+INVOICE_KEYWORDS = [keyword.lower() for keyword in [
+    "Invoice",
+    "Bill",
+    "Statement",
+    "Account",
+    "Receipt"
+]]
+OUTPUT_FOLDER_NAME = "bda-output"
+BDA_PROFILE_ID = "us.data-automation-v1"
+
+try:
+    response = bda_client.list_data_automation_projects()
+    BDA_PROJECT_ID = None
+    for project in response["projects"]:
+        if project["projectName"] == "invoice-processing":
+            project_arn = project["projectArn"]
+            BDA_PROJECT_ID = re.search(r'data-automation-project/(.+)$', project_arn).group(1)
+            break
+    
+    if not BDA_PROJECT_ID:
+        logger.warning("BDA project 'invoice-processing' not found, will use fallback")
+        BDA_PROJECT_ID = "fallback-project-id"
+except Exception as e:
+    logger.warning(f"Could not retrieve BDA project ID: {str(e)}")
+    BDA_PROJECT_ID = "fallback-project-id"
+
+def lambda_handler(event, context):
+    """
+    Lambda 1: Processes incoming emails from S3 and triggers Bedrock Data Automation
+    """
+    # Log the actual bucket names being used
+    inbox_bucket = os.environ.get('INBOX_BUCKET')
+    destination_bucket = os.environ.get('DESTINATION_BUCKET')
+    logger.info(f"Using bucket names - Inbox: {inbox_bucket}, Destination: {destination_bucket}")
+    
+    logger.info(f"Starting to process new email...")
+    
+    try:
+        # Get bucket and key from the S3 event
+        bucket = event["Records"][0]["s3"]["bucket"]["name"]
+        key = event["Records"][0]["s3"]["object"]["key"]
+
+        logger.info(f"Processing email from bucket: {bucket}, key: {key}")
+        
+        # Verify we're using the correct bucket
+        if bucket != inbox_bucket:
+            logger.warning(f"Event bucket ({bucket}) doesn't match configured inbox bucket ({inbox_bucket})")
+        
+        # Get the email object from S3
+        response = s3.get_object(Bucket=bucket, Key=key)
+        raw_email = response["Body"].read()
+        
+        # Parse the email
+        msg = email.message_from_bytes(raw_email, policy=policy.default)
+
+        subject = msg["Subject"] or "No Subject"
+        sender = msg["From"] or "Unknown Sender"
+
+        logger.info(f"Email from {sender} with subject: {subject}")
+
+        email_body = extract_email_body(msg)
+        is_invoice = is_likely_invoice(email_body, subject)
+        logger.info(f"Is likely invoice: {is_invoice}")
+                                              
+        attachments = list(msg.iter_attachments())
+        logger.info(f"Found {len(attachments)} attachments")
+
+        if not attachments:
+            logger.info("No attachments found - ignoring")
+            return {
+                'statusCode': 200,
+                'body': json.dumps("No attachments found - ignoring")
+            }
+
+        # Setup BDA
+        aws_account_id = context.invoked_function_arn.split(":")[4]
+        bda_project_arn = f"arn:aws:bedrock:{AWS_REGION}:{aws_account_id}:data-automation-project/{BDA_PROJECT_ID}"
+        bda_profile_arn = f"arn:aws:bedrock:{AWS_REGION}:{aws_account_id}:data-automation-profile/{BDA_PROFILE_ID}"
+
+        logger.info(f"Using BDA Project ARN: {bda_project_arn}")
+
+        # Extract and upload attachments to S3
+        for part in attachments:
+            filename = part.get_filename()
+            if not filename:
+                continue
+                
+            filename = filename.lower()
+            logger.info(f"Processing attachment: {filename}")
+
+            filename_contains_keyword = False
+            if not is_invoice:
+                filename_contains_keyword = any(keyword in filename for keyword in INVOICE_KEYWORDS)
+
+            # Only process PDFs that are likely invoices
+            if filename.endswith(".pdf") and (is_invoice or filename_contains_keyword):
+                # Create meaningful and unique filename
+                timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+                sanitized_sender = sanitize_for_s3(sender.split('@')[0])
+                sanitized_filename = sanitize_for_s3(filename, allow_dot=True)
+                attachment_key = f"attachments/{timestamp}-{sanitized_sender}-{sanitized_filename}"
+
+                metadata = {
+                    "email_key": key,
+                    "filename": filename,
+                    "attachment_key": attachment_key,
+                    "sender": sender,
+                    "subject": subject
+                }
+
+                file_data = part.get_payload(decode=True)
+
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=attachment_key,
+                    Body=file_data,
+                    Metadata=metadata,
+                    ContentType="application/pdf"
+                )
+
+                metadata_with_body = {
+                    **metadata,
+                    "email_body": email_body,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+
+                json_data = json.dumps(metadata_with_body, ensure_ascii=False).encode('utf-8')
+
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=f"{attachment_key}/metadata.json",
+                    Body=json_data,
+                    ContentType="application/json"
+                )
+
+                logger.info(f"Uploaded attachment to S3: {attachment_key}")
+
+                # Get S3 URI for the attachment
+                s3_uri = f"s3://{bucket}/{attachment_key}"
+
+                try:
+                    # Trigger BDA IDP
+                    response = bedrock_data_automation.invoke_data_automation_async(
+                        clientToken=str(uuid.uuid4()),
+                        inputConfiguration={
+                            's3Uri': s3_uri
+                        },
+                        outputConfiguration={
+                            's3Uri': f"s3://{bucket}/{OUTPUT_FOLDER_NAME}"
+                        },
+                        dataAutomationConfiguration={
+                            'dataAutomationProjectArn': bda_project_arn,
+                            'stage': 'LIVE'
+                        },
+                        dataAutomationProfileArn=bda_profile_arn,
+                        notificationConfiguration={
+                            'eventBridgeConfiguration': {
+                                'eventBridgeEnabled': True
+                            }
+                        }
+                    )
+
+                    invocation_id = response["invocationArn"].split('/')[-1]
+                    logger.info(f"Successfully invoked BDA IDP (job_id: {invocation_id})")
+                    
+                    # Store BDA job info
+                    invocation_data = {
+                        "invocationId": invocation_id,
+                        "invocationArn": response["invocationArn"],
+                        "attachmentKey": attachment_key,
+                        "emailMetadata": metadata_with_body,
+                        "s3OutputUri": f"s3://{bucket}/{OUTPUT_FOLDER_NAME}",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    
+                    s3.put_object(
+                        Bucket=bucket,
+                        Key=f"bda-jobs/{invocation_id}.json",
+                        Body=json.dumps(invocation_data),
+                        ContentType="application/json"
+                    )
+                    
+                    # Start Step Functions execution
+                    state_machine_arn = os.environ.get('STATE_MACHINE_ARN')
+                    if state_machine_arn:
+                        execution_input = {
+                            "bucket": bucket,
+                            "invocationId": invocation_id,
+                            "emailMetadata": metadata_with_body,
+                            "classifierFunctionName": os.environ.get('CLASSIFIER_FUNCTION_NAME')
+                        }
+                        
+                        stepfunctions_client.start_execution(
+                            stateMachineArn=state_machine_arn,
+                            name=f"invoice-processing-{invocation_id}",
+                            input=json.dumps(execution_input)
+                        )
+                        
+                        logger.info(f"Started Step Functions execution for invocation {invocation_id}")
+                        
+                except Exception as bda_error:
+                    logger.error(f"BDA invocation failed: {str(bda_error)}")
+                    # Continue processing other attachments even if BDA fails
+                    continue
+
+        return {
+            "statusCode": 200,
+            "body": json.dumps(f"Successfully processed {len(attachments)} attachments from email {key}.")
+        }
+        
+    except Exception as e:
+        stack_trace = traceback.format_exc()
+        logger.error(f"Error processing email: {str(e)}")
+        logger.error(f"Stack trace: {stack_trace}")
+        
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": str(e),
+                "stack_trace": stack_trace,
+                "message": "Error processing email"
+            })
+        }
+
+def is_likely_invoice(email_body: str, email_subject: str) -> bool:
+    """Check if email content suggests it contains an invoice"""
+    if not email_body:
+        email_body = ""
+    if not email_subject:
+        email_subject = ""
+        
+    email_body = email_body.lower()
+    email_subject = email_subject.lower()
+    
+    return any(
+        keyword in email_body or 
+        keyword in email_subject 
+        for keyword in INVOICE_KEYWORDS
+    )
+
+def extract_email_body(msg) -> str:
+    """Extract email body using the preferred content type"""
+    try:
+        body_part = msg.get_body(preferencelist=("plain", "html"))
+        if body_part is not None:
+            content = body_part.get_payload(decode=True)
+            if content:
+                return content.decode('utf-8', errors='ignore')
+        return ""
+    except Exception as e:
+        logger.error(f"Failed to extract email body: {e}")
+        return ""
+    
+def sanitize_for_s3(value: str, allow_dot=False) -> str:
+    """Sanitizes a string to be safe for use in S3 object keys"""
+    if not value:
+        return "unknown"
+
+    # Normalize unicode characters
+    try:
+        import unicodedata
+        value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    except:
+        pass
+
+    # Convert to lowercase
+    value = value.lower()
+
+    # Replace problematic characters
+    value = re.sub(r"[@\s]+", "-", value)
+    value = re.sub(r"[^\w.-]" if allow_dot else r"[^\w-]", "-", value)
+
+    # Collapse multiple dashes
+    value = re.sub(r"-{2,}", "-", value)
+
+    # Strip leading/trailing non-alphanumeric
+    value = value.strip("-")
+
+    # Truncate to safe length
+    return value[:100]

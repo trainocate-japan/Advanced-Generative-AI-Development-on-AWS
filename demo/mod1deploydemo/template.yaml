@@ -1,0 +1,163 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'GenAI Model Selection Demo - SAM Template for Easy Instructor Deployment'
+
+Globals:
+  Function:
+    Timeout: 900
+    MemorySize: 512
+    Runtime: python3.12
+    Environment:
+      Variables:
+        LOG_LEVEL: INFO
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,OPTIONS'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+
+Resources:
+  # Lambda Function for GenAI Routing
+  GenAIRouterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: genai-model-selection-demo-router
+      CodeUri: lambda/
+      Handler: lambda_handler.lambda_handler
+      Description: Main Lambda function for intelligent GenAI model routing
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+              - bedrock:Converse
+              - bedrock:ConverseStream
+              - bedrock:GetFoundationModel
+              - bedrock:ListFoundationModels
+            Resource: "*"
+      Events:
+        QueryApi:
+          Type: Api
+          Properties:
+            Path: /query
+            Method: post
+        HealthApi:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: get
+        MetricsApi:
+          Type: Api
+          Properties:
+            Path: /metrics
+            Method: get
+        AdminSimulateFailure:
+          Type: Api
+          Properties:
+            Path: /admin/simulate-failure
+            Method: post
+      Tags:
+        Project: genai-model-selection-demo
+        Environment: demo
+        Purpose: education
+
+  # S3 Bucket for Website
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "genai-demo-website-${AWS::AccountId}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      Tags:
+        - Key: Project
+          Value: genai-model-selection-demo
+        - Key: Environment
+          Value: demo
+
+  # S3 Bucket Policy for CloudFront
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub "${WebsiteBucket.Arn}/*"
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub "arn:aws:cloudfront::${AWS::AccountId}:distribution/${CloudFrontDistribution}"
+
+  # Origin Access Control for CloudFront
+  CloudFrontOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "${AWS::StackName}-oac"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # CloudFront Distribution
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt WebsiteBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !Ref CloudFrontOriginAccessControl
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+          Compress: true
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+      Tags:
+        - Key: Project
+          Value: genai-model-selection-demo
+        - Key: Environment
+          Value: demo
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod"
+  
+  WebsiteURL:
+    Description: CloudFront website URL
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+  
+  WebsiteBucket:
+    Description: S3 bucket for website files
+    Value: !Ref WebsiteBucket
+  
+  LambdaFunction:
+    Description: Lambda function name
+    Value: !Ref GenAIRouterFunction
