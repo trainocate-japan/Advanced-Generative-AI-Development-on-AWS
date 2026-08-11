@@ -1,19 +1,35 @@
 # モジュール 5: Amazon Bedrock AgentCore - ハンズオン手順
 
+## 環境セットアップ
+
+```bash
+cd ~/handson/M05-agentcore
+
+# 基本パッケージ
+pip install boto3 strands-agents strands-agents-tools
+
+# AgentCore Runtime デプロイ用
+pip install bedrock-agentcore bedrock-agentcore-starter-toolkit
+
+# フレームワーク比較用（パート3）
+pip install langgraph langchain-aws langchain-core
+pip install crewai crewai-tools
+```
+
+---
+
 ## パート 1: エージェントの基本設計（15分）
 
 ### ステップ 1.1: Strands Agents によるエージェント構築
 
 ```bash
-cd ~/handson/M05-agentcore
-pip install strands-agents strands-agents-tools boto3
 python3.12 travel_agent.py
 ```
 
 エージェントの基本コンポーネント：
 - **モデル**: 推論エンジン（Nova Pro）
-- **ツール**: 外部API/サービスとのインターフェース
-- **メモリ**: 会話コンテキストの保持
+- **ツール**: 外部API/サービスとのインターフェース（TOOLS_SCHEMA で定義）
+- **エージェントループ**: モデルが toolUse を返す限りツール実行を繰り返す
 - **プロンプト**: エージェントの行動指針
 
 ### ステップ 1.2: ツールの定義
@@ -26,110 +42,134 @@ python3.12 travel_agent.py
 
 ### ステップ 1.3: エージェントの実行
 
-対話例：
+Converse API の `toolUse` による自律的ツール選択：
 ```
 ユーザー: 来月東京から沖縄に2泊3日で旅行したいです。予算は10万円以内で。
 
-エージェント（思考過程）:
-1. フライトを検索する必要がある → search_flights ツールを呼び出し
-2. ホテルを検索する必要がある → search_hotels ツールを呼び出し
-3. 天気を確認する → get_weather ツールを呼び出し
-4. 予算内に収まるか確認 → calculate_budget ツールを呼び出し
-5. 結果を統合して提案を生成
+エージェントループ:
+  stopReason == "tool_use" → ツール実行 → 結果をモデルに返す → 再推論
+  stopReason == "end_turn" → 最終回答を出力
+
+モデルが自律的に判断:
+  1. search_flights を呼ぶべき → 呼び出し → 結果取得
+  2. search_hotels を呼ぶべき → 呼び出し → 結果取得
+  3. get_weather を呼ぶべき → 呼び出し → 結果取得
+  4. calculate_budget を呼ぶべき → 呼び出し → 結果取得
+  5. 全情報が揃った → 最終プランを生成 (end_turn)
 ```
 
 ---
 
-## パート 2: AgentCore の各コンポーネント（20分）
+## パート 2: AgentCore の各コンポーネント（25分）
 
-### ステップ 2.1: AgentCore Gateway - ツール検索とルーティング
+### ステップ 2.1: AgentCore Gateway - ツール管理とルーティング
 
 ```bash
 python3.12 agentcore_gateway_demo.py
 ```
 
+実行内容：
+1. Gateway を作成（MCP プロトコル、NONE 認可）
+2. Lambda ツールを Gateway Target として登録
+3. 登録情報を確認
+
 Gateway の機能：
-- 利用可能なツールの自動検出とインデックス作成
-- セマンティック検索によるツール選択
-- 統一されたアクセスインターフェース
+- API / Lambda / MCP サーバーを MCP 互換ツールに変換
+- セマンティック検索によるツール自動選択
+- 認証・認可の一元管理
+
+クリーンアップ：
+```bash
+python3.12 agentcore_gateway_demo.py --cleanup
+```
 
 ### ステップ 2.2: AgentCore Memory - コンテキスト保持
 
-メモリ管理のデモ：
-- 短期記憶: 現在の会話セッション
-- 長期記憶: ユーザーの嗜好、過去の予約履歴
-- エピソード記憶: 過去の対話パターン
+```bash
+python3.12 agentcore_memory_demo.py
+```
+
+実行内容：
+1. Memory リソースを作成（要約 + ユーザー嗜好戦略）
+2. 会話イベントを登録（短期記憶）
+3. 短期記憶を取得（イベント一覧）
+4. 長期記憶をセマンティック検索
+
+Memory の戦略：
+- **summaryMemoryStrategy**: 会話を要約して保存
+- **userPreferenceMemoryStrategy**: ユーザー嗜好を自動抽出
 
 ```python
 # メモリの活用例
 # ユーザー: 「前回と同じホテルでお願いします」
-# → Memory から過去の予約情報を取得して利用
+# → retrieve_memory_records で過去の嗜好を検索
+# → 「ANAが好き」「リゾートホテル希望」を取得
+```
+
+クリーンアップ：
+```bash
+python3.12 agentcore_memory_demo.py --cleanup
 ```
 
 ### ステップ 2.3: AgentCore Identity - セキュアなアクセス
 
-エージェントの Identity 管理：
-- エージェント ID ディレクトリ
-- 委任されたアクセス制御
-- ツール呼び出し前のポリシーチェック
+```bash
+python3.12 agentcore_identity_demo.py
+```
+
+実行内容：
+1. Workload Identity を作成（エージェントに固有 ID を付与）
+2. 登録済み Identity の一覧を確認
+
+Identity の機能：
+- エージェントに固有の ID を付与（IAM ロールとは別）
+- OAuth2 フローによる委任アクセス
+- Gateway と連携してツール呼び出しを認可
+- 監査ログで全アクションを追跡
+
+クリーンアップ：
+```bash
+python3.12 agentcore_identity_demo.py --cleanup
+```
 
 ### ステップ 2.4: AgentCore Runtime - サーバーレスデプロイ
 
-プロトタイプから本番への移行：
-- ローカルでのテスト → AgentCore Runtime にデプロイ
-- オートスケーリング
-- ヘルスチェックとモニタリング
+```bash
+python3.12 agentcore_runtime_deploy.py
+```
+
+実行内容：
+1. Strands エージェントのコードを生成
+2. starter-toolkit で configure → launch（ビルド＆デプロイ）
+3. デプロイ済みエージェントを invoke で呼び出し
+
+※ Docker が起動中であること
+
+デプロイの 3 ステップ:
+```python
+from bedrock_agentcore_starter_toolkit import Runtime
+
+runtime = Runtime()
+runtime.configure(entrypoint="agent.py", ...)  # 設定
+runtime.launch()                                # ビルド & デプロイ
+runtime.invoke({"prompt": "..."})              # 呼び出し
+```
+
+呼び出しテスト：
+```bash
+python3.12 agentcore_runtime_deploy.py --invoke "東京から沖縄の旅行プラン"
+```
+
+クリーンアップ：
+```bash
+python3.12 agentcore_runtime_deploy.py --cleanup
+```
 
 ---
 
-## パート 3: プロトタイプ vs 本番のギャップ（15分）
+## パート 3: フレームワーク比較（10分）
 
-### ステップ 3.1: 本番稼働の課題
-
-```bash
-python3.12 production_challenges.py
-```
-
-プロトタイプと本番のギャップ：
-
-| 側面 | プロトタイプ | 本番 |
-|-----|-----------|------|
-| スケール | 1ユーザー | 1000+同時接続 |
-| 可用性 | ダウン許容 | 99.9% SLA |
-| セキュリティ | 最小限 | 多層防御 |
-| コスト | 無視 | 最適化必須 |
-| モニタリング | print文 | 構造化ログ |
-| エラー処理 | クラッシュ | グレースフルデグラデーション |
-
-### ステップ 3.2: AgentCore による解決
-
-AgentCore が解決する本番課題：
-1. **Runtime**: サーバーレスでスケール自動化
-2. **Identity**: OAuth2ベースの委任アクセス
-3. **Policy**: ツール呼び出し前のポリシーチェック
-4. **Observability**: トレーシング、メトリクス自動収集
-5. **Evaluations**: ライブインタラクションのサンプリングと品質スコア
-
----
-
-## パート 4: フレームワーク比較（10分）
-
-### 環境セットアップ
-
-```bash
-cd ~/handson/M05-agentcore
-
-# Strands Agents（AWS ネイティブ）
-pip install strands-agents strands-agents-tools boto3
-
-# LangGraph（グラフベース・ワークフロー）
-pip install langgraph langchain-aws langchain-core boto3
-
-# CrewAI（マルチエージェント協調）
-pip install crewai crewai-tools boto3
-```
-
-### ステップ 4.1: Strands Agents の実行
+### ステップ 3.1: Strands Agents の実行
 
 ```bash
 python3.12 framework_strands.py
@@ -142,7 +182,7 @@ python3.12 framework_strands.py
 - Amazon Bedrock とネイティブ統合
 - AgentCore Runtime にそのままデプロイ可能
 
-### ステップ 4.2: LangGraph の実行
+### ステップ 3.2: LangGraph の実行
 
 ```bash
 python3.12 framework_langgraph.py
@@ -155,7 +195,7 @@ python3.12 framework_langgraph.py
 - Human-in-the-Loop をグラフに組み込み可能
 - `stream()` でステップごとの実行を可視化
 
-### ステップ 4.3: CrewAI の実行
+### ステップ 3.3: CrewAI の実行
 
 ```bash
 python3.12 framework_crewai.py
@@ -168,7 +208,7 @@ python3.12 framework_crewai.py
 - エージェント間で結果を受け渡し（委任も可能）
 - `crew.kickoff()` で全タスクを自動実行
 
-### ステップ 4.4: 比較ポイント
+### ステップ 3.4: 比較まとめ
 
 | フレームワーク | 特徴 | 最適なユースケース |
 |-------------|------|----------------|
@@ -176,8 +216,7 @@ python3.12 framework_crewai.py
 | LangGraph | 複雑なステートフロー | 条件分岐が多い対話フロー |
 | CrewAI | マルチエージェント協調 | チーム型のタスク分担 |
 
-### ステップ 4.5: 選定基準
-
+選定基準:
 - **シンプルなエージェント** → Strands Agents
 - **複雑なワークフロー** → LangGraph
 - **複数エージェントの協調** → CrewAI
@@ -185,32 +224,14 @@ python3.12 framework_crewai.py
 
 ---
 
-## デモ手順
-
-### デモ 1: エージェントの自律的動作（10分）
-1. 旅行プランの相談を入力
-2. エージェントがツールを自律的に選択・実行する過程を表示
-3. 各ツール呼び出しの結果を表示
-4. 最終的な旅行プランの提案を表示
-
-### デモ 2: メモリによるコンテキスト保持（5分）
-1. 最初の質問で旅行プランを作成
-2. 「予算をもう少し上げたら？」と追加質問
-3. 過去のコンテキストを保持した上で修正案を提示
-
-### デモ 3: AgentCore の全体像（5分）
-1. AgentCore の各コンポーネントの関係を図示
-2. プロトタイプ→本番の移行パスを説明
-3. Observability でのエージェント動作の可視化
-
----
-
 ## クリーンアップ
 
 ```bash
-# ローカル実行のみの場合はクリーンアップ不要
-# AgentCore にデプロイした場合:
-# AWS コンソールからエージェントを削除
+# 各デモの --cleanup オプションで個別削除
+python3.12 agentcore_gateway_demo.py --cleanup
+python3.12 agentcore_memory_demo.py --cleanup
+python3.12 agentcore_identity_demo.py --cleanup
+python3.12 agentcore_runtime_deploy.py --cleanup
 ```
 
 ---
@@ -219,4 +240,5 @@ python3.12 framework_crewai.py
 
 1. **マルチエージェント**: 予約エージェントと推薦エージェントを連携させる
 2. **Human-in-the-Loop**: 高額予約は人間の承認を必要とするフローを追加
-3. **AgentCore Browser**: Webサイトから最新の旅行情報を自動取得する機能を追加
+3. **Gateway 活用**: 実際の Lambda 関数を Gateway Target として登録し、エージェントから呼び出す
+4. **Memory 活用**: 複数セッションにまたがる長期記憶を使ってパーソナライズされた提案を実現
