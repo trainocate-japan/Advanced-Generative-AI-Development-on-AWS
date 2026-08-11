@@ -285,6 +285,87 @@ python3.12 rag_evaluation.py
 
 ---
 
+### ステップ 4.5: Amazon Bedrock Evaluations による RAG 評価（コンソール）
+
+マネジメントコンソールから Amazon Bedrock Evaluations の RAG 評価ジョブを作成し、
+ナレッジベースの品質をビルトインメトリクスで自動評価します。
+
+#### 1. テストデータのアップロード
+
+評価用データセット（`rag-eval-dataset.jsonl`）を S3 にアップロードします：
+
+```bash
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+aws s3 cp rag-eval-dataset.jsonl s3://legal-kb-demo-${ACCOUNT_ID}/evaluation/rag-eval-dataset.jsonl
+```
+
+データセットのフォーマット（JSONL、各行が1つの評価ケース）：
+```json
+{
+  "conversationTurns": [{
+    "prompt": {"content": [{"text": "契約書の解除条件について教えてください"}]},
+    "referenceResponses": [{"content": [{"text": "期待する正解回答..."}]}]
+  }]
+}
+```
+
+#### 2. コンソールから評価ジョブを作成
+
+1. **Amazon Bedrock コンソール** → 左メニュー「Inference and Assessment」→「Evaluations」
+2. **RAG evaluations** ペインで「Create」をクリック
+3. **Evaluation details**:
+   - Evaluation name: `legal-kb-rag-eval`
+   - Evaluator model: `Amazon Nova Pro`（または `Meta Llama 3.1 70B`）
+4. **Inference source**:
+   - Select source: **Bedrock Knowledge Base**
+   - Choose a Knowledge Base: `legal-knowledge-base-demo`（作成した KB を選択）
+   - Evaluation type: **Retrieval and response generation**
+   - Model for generation: `Amazon Nova Pro`
+5. **Metrics**（評価指標を選択）:
+   - `Correctness` — 回答の正確性（referenceResponses との一致度）
+   - `Completeness` — 回答の完全性（重要な情報の網羅度）
+   - `Faithfulness` — 忠実性（検索結果に基づいた回答か）
+   - `Helpfulness` — 有用性（質問者にとって実用的か）
+   - `Citation Coverage` — 引用カバー率（回答の根拠が引用で裏付けられているか）
+   - `Citation Precision` — 引用精度（引用が回答内容に関連しているか）
+6. **Datasets**:
+   - Prompt dataset: `s3://legal-kb-demo-<ACCOUNT_ID>/evaluation/rag-eval-dataset.jsonl`
+   - Output location: `s3://legal-kb-demo-<ACCOUNT_ID>/evaluation/results/`
+7. **Service role**: 新規作成 or 既存のロールを選択
+8. 「Create」をクリックして評価ジョブを開始
+
+#### 3. 評価結果の確認
+
+評価ジョブ完了後（通常 5-10 分）：
+
+1. **Evaluations** 画面でジョブのステータスが「Completed」になったことを確認
+2. ジョブ名をクリックして詳細を表示
+3. **Results** タブで各メトリクスのスコアを確認：
+
+| メトリクス | 説明 | 目標値 |
+|-----------|------|--------|
+| Correctness | 正解との一致度 | ≥ 0.7 |
+| Completeness | 情報の網羅性 | ≥ 0.7 |
+| Faithfulness | ソースへの忠実性 | ≥ 0.8 |
+| Helpfulness | 実用性 | ≥ 0.7 |
+| Citation Coverage | 引用カバー率 | ≥ 0.6 |
+| Citation Precision | 引用精度 | ≥ 0.7 |
+
+4. 個別の質問ごとの結果を展開して、どの質問でスコアが低いかを特定
+
+#### 4. LLM-as-a-Judge 評価との比較
+
+| 観点 | Bedrock Evaluations | rag_evaluation.py（自作） |
+|------|--------------------|-----------------------|
+| セットアップ | コンソールで数クリック | コード実装が必要 |
+| メトリクス | ビルトイン 10 種類 | カスタム定義可能 |
+| スケール | 最大 1000 件 / ジョブ | 制限なし（コスト次第） |
+| カスタマイズ | メトリクス選択のみ | プロンプト自由設計 |
+| CI/CD 統合 | API / CLI で自動化可能 | 直接スクリプト実行 |
+| 推奨用途 | 定期的な品質チェック | 開発中の細かい改善 |
+
+---
+
 ## パート 5: チャンキング最適化（10分）
 
 ### ステップ 5.1: チャンキング戦略の比較
