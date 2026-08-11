@@ -153,7 +153,21 @@ python3.12 agentcore_runtime_deploy.py
 ```bash
 # 1. Configure
 agentcore configure -e runtime_agent.py -r us-east-1 --disable-memory
+```
 
+Configure の対話プロンプトでの選択：
+| プロンプト | 選択 |
+|-----------|------|
+| Agent name | `travel_agent` |
+| Path or Press Enter to use detected dependency file | Enter（requirements.txt を使用） |
+| Select deployment type | `1`（Direct Code Deploy） |
+| Select Python runtime version | `3`（PYTHON_3_12） |
+| Execution role ARN/name | Enter（自動作成） |
+| S3 URI/path | Enter（自動作成） |
+| Configure OAuth authorizer instead? | `no`（IAM 認証） |
+| Configure request header allowlist? | `no` |
+
+```bash
 # 2. Deploy（CodeBuild でリモートビルド、数分かかります）
 agentcore deploy
 
