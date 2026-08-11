@@ -235,62 +235,35 @@ def get_memory_id():
 
 
 def deploy():
-    """starter-toolkit CLI でデプロイ"""
+    """デプロイ手順を表示"""
     print("\n  [2] AgentCore Runtime へのデプロイ")
     print("  " + "-" * 55)
+    print(f"""
+    以下のコマンドを順番に実行してください:
 
-    import subprocess
+    # 1. Configure（メモリは Memory デモで作成済みなので無効化）
+    agentcore configure -e {AGENT_FILE} -r us-east-1 --disable-memory
 
-    region = boto3.session.Session().region_name or "us-east-1"
+    # 2. Deploy（CodeBuild でリモートビルド、数分かかります）
+    agentcore deploy
 
-    # Step 1: Configure
-    print(f"\n    Configure...")
-    result = subprocess.run(
-        ["agentcore", "configure", "-e", AGENT_FILE, "-r", region, "--disable-memory"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        print(f"    ⚠ configure エラー: {result.stderr}")
-        raise RuntimeError(result.stderr)
-    print(f"    ✓ 設定完了")
+    # 3. 呼び出しテスト
+    agentcore invoke '{{"prompt": "東京から沖縄の2泊3日旅行プランを作って"}}'
 
-    # Step 2: Deploy
-    print(f"\n    Deploy...")
-    print(f"    ※ CodeBuild でコンテナビルドが行われます")
-    print(f"    ※ 数分かかります...")
-    result = subprocess.run(
-        ["agentcore", "deploy"],
-        capture_output=True, text=True, timeout=600,
-    )
-    if result.returncode != 0:
-        print(f"    ⚠ deploy エラー: {result.stderr}")
-        raise RuntimeError(result.stderr)
-    print(f"    ✓ デプロイ完了!")
-    print(f"    {result.stdout[-200:] if result.stdout else ''}")
+    # 4. クリーンアップ
+    agentcore destroy
+""")
 
 
 def invoke_agent(prompt):
-    """デプロイ済みエージェントを呼び出す"""
+    """呼び出し手順を表示"""
     print("\n  [3] エージェントの呼び出し")
     print("  " + "-" * 55)
+    print(f"""
+    以下のコマンドを実行してください:
 
-    import subprocess
-
-    payload = json.dumps({"prompt": prompt, "actor_id": "demo-user-001"})
-    print(f"    プロンプト: {prompt}")
-    print(f"    呼び出し中...")
-
-    result = subprocess.run(
-        ["agentcore", "invoke", payload],
-        capture_output=True, text=True, timeout=120,
-    )
-    if result.returncode != 0:
-        print(f"    ⚠ invoke エラー: {result.stderr}")
-        return
-
-    print(f"\n    エージェント応答:")
-    print(f"    {result.stdout}")
-    return result.stdout
+    agentcore invoke '{{"prompt": "{prompt}"}}'
+""")
 
 
 def cleanup_files():
@@ -328,15 +301,8 @@ def main():
     # 1. ファイル準備
     setup_files()
 
-    # 2. デプロイ
-    try:
-        deploy()
-    except FileNotFoundError:
-        print(f"\n    ⚠ agentcore CLI が未インストールです")
-        print(f"    以下を実行してください:")
-        print(f"      pip install bedrock-agentcore-starter-toolkit")
-    except Exception as e:
-        print(f"\n    ⚠ デプロイエラー: {e}")
+    # 2. デプロイ手順表示
+    deploy()
 
     print(f"""
   {'=' * 65}
