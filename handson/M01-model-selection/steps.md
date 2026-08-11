@@ -14,7 +14,7 @@ pip install boto3 streamlit
 `benchmark.py` を使用して、3つのモデルを同一プロンプトで比較します。
 
 ```bash
-python3 benchmark.py
+python3.12 benchmark.py
 ```
 
 このスクリプトは以下を測定します：

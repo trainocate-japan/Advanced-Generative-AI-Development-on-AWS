@@ -7,7 +7,7 @@
 ```bash
 cd ~/handson/M05-prompt-management
 pip install strands-agents strands-agents-tools boto3
-python3 travel_agent.py
+python3.12 travel_agent.py
 ```
 
 エージェントの基本コンポーネント：
@@ -45,7 +45,7 @@ python3 travel_agent.py
 ### ステップ 2.1: AgentCore Gateway - ツール検索とルーティング
 
 ```bash
-python3 agentcore_gateway_demo.py
+python3.12 agentcore_gateway_demo.py
 ```
 
 Gateway の機能：
@@ -87,7 +87,7 @@ Gateway の機能：
 ### ステップ 3.1: 本番稼働の課題
 
 ```bash
-python3 production_challenges.py
+python3.12 production_challenges.py
 ```
 
 プロトタイプと本番のギャップ：

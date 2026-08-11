@@ -6,7 +6,7 @@
 
 ```bash
 cd ~/handson/M10-rag-knowledgebase
-python3 enterprise_api_demo.py
+python3.12 enterprise_api_demo.py
 ```
 
 API Gateway + Lambda + Bedrock のパターン：
@@ -43,7 +43,7 @@ ERP (注文作成) → EventBridge → Lambda → Bedrock (分析)
 ### ステップ 2.1: VPC エンドポイントによるプライベートアクセス
 
 ```bash
-python3 vpc_endpoint_demo.py
+python3.12 vpc_endpoint_demo.py
 ```
 
 Bedrock への VPC エンドポイント設定：

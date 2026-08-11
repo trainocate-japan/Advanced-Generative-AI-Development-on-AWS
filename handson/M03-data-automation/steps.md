@@ -23,7 +23,7 @@ aws s3 cp sample-docs/ s3://legal-kb-demo-$(aws sts get-caller-identity --query 
 AWS コンソールまたはスクリプトでナレッジベースを作成します：
 
 ```bash
-python3 setup_knowledgebase.py
+python3.12 setup_knowledgebase.py
 ```
 
 スクリプトは以下を実行します：
@@ -50,7 +50,7 @@ python3 setup_knowledgebase.py
 ### ステップ 2.1: 基本的な RetrieveAndGenerate
 
 ```bash
-python3 rag_basic.py
+python3.12 rag_basic.py
 ```
 
 以下のクエリで動作を確認します：
@@ -61,7 +61,7 @@ python3 rag_basic.py
 ### ステップ 2.2: Retrieve API による検索結果の詳細確認
 
 ```bash
-python3 rag_retrieve.py
+python3.12 rag_retrieve.py
 ```
 
 Retrieve API で返される情報を確認します：
@@ -75,7 +75,7 @@ Retrieve API で返される情報を確認します：
 `hybrid_search.py` で以下を実装します：
 
 ```bash
-python3 hybrid_search.py
+python3.12 hybrid_search.py
 ```
 
 **ハイブリッド検索戦略:**
@@ -105,7 +105,7 @@ retrieval_config = {
 ### ステップ 3.1: マルチターン会話の実装
 
 ```bash
-python3 knowledge_assistant.py
+python3.12 knowledge_assistant.py
 ```
 
 会話型アシスタントの機能：
@@ -173,7 +173,7 @@ RAGAS（RAG Assessment）フレームワークの概念を使用した評価：
 
 ```bash
 # ナレッジベースの削除
-python3 cleanup.py
+python3.12 cleanup.py
 
 # S3 バケットの削除
 aws s3 rb s3://legal-kb-demo-$(aws sts get-caller-identity --query Account --output text) --force

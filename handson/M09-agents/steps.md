@@ -6,7 +6,7 @@
 
 ```bash
 cd ~/handson/M09-agents
-python3 evaluation_framework.py
+python3.12 evaluation_framework.py
 ```
 
 AI 品質の4つの評価軸：
@@ -51,7 +51,7 @@ JSON形式で評価を返してください。
 ### ステップ 2.1: RAGAS メトリクスの実装
 
 ```bash
-python3 ragas_evaluation.py
+python3.12 ragas_evaluation.py
 ```
 
 RAGAS フレームワークの主要メトリクス：
@@ -78,7 +78,7 @@ RAG パイプライン全体の品質 = 検索品質 × 生成品質
 ### ステップ 3.1: プロンプト A/B テスト
 
 ```bash
-python3 ab_testing.py
+python3.12 ab_testing.py
 ```
 
 テスト設計：
