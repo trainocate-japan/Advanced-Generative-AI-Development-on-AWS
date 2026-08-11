@@ -235,8 +235,7 @@ def index_documents(client, chunks):
 
         client.index(
             index=INDEX_NAME,
-            body=doc,
-            id=str(i)
+            body=doc
         )
 
         if (i + 1) % 5 == 0 or i == len(chunks) - 1:
