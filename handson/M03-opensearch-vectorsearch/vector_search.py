@@ -122,16 +122,23 @@ def create_index(client):
         }
     }
 
-    # 既存インデックスがあれば削除
+    # 既存インデックスがあれば削除して再作成
     if client.indices.exists(index=INDEX_NAME):
         try:
             client.indices.delete(index=INDEX_NAME)
             print(f"  🗑️  既存インデックス削除: {INDEX_NAME}")
             time.sleep(2)
         except Exception as e:
-            print(f"  ⚠️  インデックス削除スキップ: {e}")
+            print(f"  ℹ️  既存インデックスをそのまま使用します（削除スキップ: {type(e).__name__}）")
+            return
 
-    client.indices.create(index=INDEX_NAME, body=index_body)
+    try:
+        client.indices.create(index=INDEX_NAME, body=index_body)
+    except Exception as e:
+        if "resource_already_exists" in str(e).lower():
+            print(f"  ℹ️  インデックス既存: {INDEX_NAME}（そのまま使用）")
+            return
+        raise
     print(f"  ✅ インデックス作成: {INDEX_NAME}")
     print(f"     k-NN アルゴリズム: HNSW (nmslib)")
     print(f"     距離関数: cosinesimil（コサイン類似度）")
