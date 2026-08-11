@@ -54,7 +54,7 @@ python3.12 benchmark.py
 
 ```bash
 sam build
-sam deploy --guided
+sam deploy --stack-name m01 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset
 ```
 
 デプロイ完了後、API Gateway のエンドポイント URL をメモします。
@@ -158,7 +158,7 @@ CloudWatch ダッシュボードで以下を確認します：
 ## クリーンアップ
 
 ```bash
-sam delete --stack-name genai-model-selection-demo
+sam delete --stack-name m01
 ```
 
 ---
