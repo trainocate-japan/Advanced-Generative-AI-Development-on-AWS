@@ -245,6 +245,11 @@ def create_gateway_target(gateway_id):
                 }
             }
         },
+        credentialProviderConfigurations=[
+            {
+                "credentialProviderType": "GATEWAY_IAM_ROLE",
+            }
+        ],
     )
 
     target_id = response["targetId"]
