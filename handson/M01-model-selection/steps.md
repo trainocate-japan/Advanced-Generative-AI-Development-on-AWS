@@ -185,6 +185,109 @@ AWS コンソールで CloudWatch ダッシュボード（`GenAI-Model-Selection
 
 ---
 
+## パート 5: Bedrock モデル評価ジョブの実行（15分）
+
+Amazon Bedrock のモデル評価機能を使用して、定量的（Programmatic）および定性的（LLM as a Judge）な評価を実行します。
+
+### 評価データセットの確認
+
+評価用データセットは以下に配置済みです：
+
+```
+入力: s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl
+出力: s3://handson-demo-assets-079700436326/evaluation/results/
+```
+
+データセットは JSONL 形式で、各行に `prompt` と `referenceResponse`（期待される回答）が含まれています。
+
+---
+
+### ステップ 5.1: Automatic: Programmatic 評価の実行
+
+プログラム的評価では、正確性・関連性などを自動計算メトリクスで測定します。
+
+1. **Bedrock コンソール** → 左メニュー「Assessment & deployment」→「Model evaluation」を開く
+
+2. **Create** ボタンをクリックし、**Automatic: Programmatic** を選択
+
+3. 評価ジョブの設定：
+   - **Evaluation name**: `m01-programmatic-eval`
+   - **Description**（任意）: `Module 1 ハンズオン - プログラム的モデル評価`
+
+4. **評価対象モデルの選択**:
+   - 比較したいモデルを選択（例: Amazon Nova Lite、Amazon Nova Pro、Claude Sonnet）
+
+5. **メトリクスの選択**:
+   - **Accuracy**（正確性）
+   - **Robustness**（堅牢性）
+   - 利用可能なメトリクスから目的に合ったものを選択
+
+6. **データセットの指定**:
+   - **Input S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl`
+   - **Output S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/results/`
+
+7. **Create** をクリックして評価を開始
+
+8. 評価完了後（数分〜十数分）、結果を確認：
+   - 各モデルのメトリクススコア比較
+   - 強み・弱みの可視化
+
+---
+
+### ステップ 5.2: Automatic: LLM as a Judge 評価の実行
+
+LLM as a Judge では、別のLLM（審査員モデル）が応答品質を評価します。人間の判断に近い定性的な評価が可能です。
+
+1. **Bedrock コンソール** → 左メニュー「Assessment & deployment」→「Model evaluation」を開く
+
+2. **Create** ボタンをクリックし、**Automatic: LLM as a judge** を選択
+
+3. 評価ジョブの設定：
+   - **Evaluation name**: `m01-llm-judge-eval`
+   - **Description**（任意）: `Module 1 ハンズオン - LLM as a Judge モデル評価`
+
+4. **評価対象モデルの選択**:
+   - 比較したいモデルを選択（例: Amazon Nova Lite、Amazon Nova Pro、Claude Sonnet）
+
+5. **Judge モデルの選択**:
+   - 審査員として使用するモデルを選択（例: Claude Sonnet 4 など高性能モデルを推奨）
+
+6. **評価基準（メトリクス）の選択**:
+   - **Helpfulness**（有用性）: 回答がユーザーの質問に的確に答えているか
+   - **Correctness**（正確性）: 事実に基づいた正確な回答か
+   - **Coherence**（一貫性）: 論理的に整合した回答か
+   - **Harmlessness**（無害性）: 有害な内容を含んでいないか
+
+7. **データセットの指定**:
+   - **Input S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl`
+   - **Output S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/results/`
+
+8. **Create** をクリックして評価を開始
+
+9. 評価完了後、結果を確認：
+   - Judge モデルによる各応答のスコアと評価理由
+   - モデル間の品質比較
+
+---
+
+### ステップ 5.3: 評価結果の比較と考察
+
+両方の評価が完了したら、以下を議論します：
+
+| 観点 | Programmatic | LLM as a Judge |
+|------|-------------|----------------|
+| 評価速度 | 高速（自動計算） | やや遅い（LLM推論） |
+| 評価コスト | 低い | Judge モデルの推論コストが発生 |
+| 評価の深さ | 定量的メトリクス | 定性的・ニュアンスのある評価 |
+| 適したケース | 大規模バッチ評価 | 品質の詳細分析 |
+
+**考察ポイント**:
+- Programmatic 評価で高スコアだが LLM Judge で低評価のケースはあるか？
+- どのモデルが総合的にベストか？
+- コストパフォーマンスを考慮した最適なモデル選定は？
+
+---
+
 ## デモでの見せ方
 
 ### デモ 1: 動的ルーティングの動作（7分）
