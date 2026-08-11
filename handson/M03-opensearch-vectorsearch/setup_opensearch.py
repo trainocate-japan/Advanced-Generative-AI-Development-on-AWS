@@ -106,6 +106,7 @@ def create_data_access_policy():
                     "Resource": [f"index/{COLLECTION_NAME}/*"],
                     "Permission": [
                         "aoss:CreateIndex",
+                        "aoss:DeleteIndex",
                         "aoss:UpdateIndex",
                         "aoss:DescribeIndex",
                         "aoss:ReadDocument",

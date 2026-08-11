@@ -124,9 +124,12 @@ def create_index(client):
 
     # 既存インデックスがあれば削除
     if client.indices.exists(index=INDEX_NAME):
-        client.indices.delete(index=INDEX_NAME)
-        print(f"  🗑️  既存インデックス削除: {INDEX_NAME}")
-        time.sleep(2)
+        try:
+            client.indices.delete(index=INDEX_NAME)
+            print(f"  🗑️  既存インデックス削除: {INDEX_NAME}")
+            time.sleep(2)
+        except Exception as e:
+            print(f"  ⚠️  インデックス削除スキップ: {e}")
 
     client.indices.create(index=INDEX_NAME, body=index_body)
     print(f"  ✅ インデックス作成: {INDEX_NAME}")
