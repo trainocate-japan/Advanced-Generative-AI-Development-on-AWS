@@ -120,6 +120,40 @@ def invoke_llm(prompt, temperature=0.1, max_tokens=500):
         return f"ERROR: {e}"
 
 
+def parse_json_response(text):
+    """LLM応答からJSONを抽出してパースする"""
+    import re
+
+    # まず直接パースを試みる
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    # ```json ... ``` ブロックから抽出
+    match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1).strip())
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # { から } までを抽出
+    match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # "score" の数値だけ抽出
+    score_match = re.search(r'"score"\s*:\s*([\d.]+)', text)
+    if score_match:
+        return {"score": float(score_match.group(1)), "reasoning": "部分パース"}
+
+    return None
+
+
 def evaluate_faithfulness(answer, contexts):
     """
     Faithfulness（忠実性）評価
@@ -151,9 +185,11 @@ def evaluate_faithfulness(answer, contexts):
 """
     result = invoke_llm(prompt)
     try:
-        parsed = json.loads(result)
-        return parsed.get("score", 0.0), parsed.get("reasoning", "")
-    except (json.JSONDecodeError, ValueError):
+        parsed = parse_json_response(result)
+        if parsed:
+            return parsed.get("score", 0.0), parsed.get("reasoning", "")
+        return 0.5, f"パース失敗: {result[:100]}"
+    except Exception:
         return 0.5, "パース失敗"
 
 
@@ -187,9 +223,11 @@ def evaluate_answer_relevancy(question, answer):
 """
     result = invoke_llm(prompt)
     try:
-        parsed = json.loads(result)
-        return parsed.get("score", 0.0), parsed.get("reasoning", "")
-    except (json.JSONDecodeError, ValueError):
+        parsed = parse_json_response(result)
+        if parsed:
+            return parsed.get("score", 0.0), parsed.get("reasoning", "")
+        return 0.5, f"パース失敗: {result[:100]}"
+    except Exception:
         return 0.5, "パース失敗"
 
 
@@ -229,9 +267,11 @@ def evaluate_context_precision(question, contexts, ground_truth):
 """
     result = invoke_llm(prompt)
     try:
-        parsed = json.loads(result)
-        return parsed.get("score", 0.0), parsed.get("reasoning", "")
-    except (json.JSONDecodeError, ValueError):
+        parsed = parse_json_response(result)
+        if parsed:
+            return parsed.get("score", 0.0), parsed.get("reasoning", "")
+        return 0.5, f"パース失敗: {result[:100]}"
+    except Exception:
         return 0.5, "パース失敗"
 
 
@@ -266,9 +306,11 @@ def evaluate_context_recall(contexts, ground_truth):
 """
     result = invoke_llm(prompt)
     try:
-        parsed = json.loads(result)
-        return parsed.get("score", 0.0), parsed.get("reasoning", "")
-    except (json.JSONDecodeError, ValueError):
+        parsed = parse_json_response(result)
+        if parsed:
+            return parsed.get("score", 0.0), parsed.get("reasoning", "")
+        return 0.5, f"パース失敗: {result[:100]}"
+    except Exception:
         return 0.5, "パース失敗"
 
 

@@ -211,14 +211,17 @@ class AccessControlledAssistant(KnowledgeAssistant):
 
     def _is_accessible(self, source_uri):
         """ソースがアクセス可能か判定"""
+        source_lower = source_uri.lower()
         for category in self.allowed_categories:
-            if category in source_uri.lower():
+            if category in source_lower:
                 return True
-        return True  # メタデータがない場合はデフォルト許可
+        # ソースにカテゴリ情報がない場合はアクセス拒否
+        return False
 
     def _is_out_of_scope(self, question):
         """質問がスコープ外かを判定"""
-        out_of_scope_keywords = ["天気", "料理", "スポーツ", "ゲーム", "映画"]
+        out_of_scope_keywords = ["天気", "料理", "スポーツ", "ゲーム", "映画",
+                                 "おすすめのレストラン", "旅行", "趣味"]
         return any(kw in question for kw in out_of_scope_keywords)
 
 
@@ -293,21 +296,40 @@ def demo_access_control():
         demo_simulated_access_control()
         return
 
-    question = "機密保持契約の詳細と知的財産権の帰属について教えてください"
+    # 個人情報保護に関する質問（privacy カテゴリ）
+    # partner/associate はアクセス可能、paralegal/intern はアクセス不可
+    question = "個人情報の第三者提供に関する規制を説明してください"
+    print(f"\n  質問: 「{question}」")
+    print(f"  （privacy カテゴリ → partner/associate のみアクセス可能）\n")
 
     roles = ["partner", "associate", "paralegal", "intern"]
 
     for role in roles:
         print(f"\n  ── ロール: {role} ──")
+        print(f"    アクセス可能: {', '.join(AccessControlledAssistant.ACCESS_MATRIX[role])}")
         assistant = AccessControlledAssistant(user_role=role)
         assistant.start_session()
 
         result = assistant.ask(question)
         if result.get("access_denied"):
             print(f"    🚫 {result['answer']}")
+        elif result.get("out_of_scope"):
+            print(f"    ⚠️  {result['answer']}")
         elif result.get("success"):
             print(f"    ✅ 回答: {result['answer'][:100]}...")
             print(f"    引用数: {len(result.get('citations', []))}")
+
+    # スコープ外質問のデモ
+    print(f"\n\n  ── スコープ外質問のテスト ──")
+    out_of_scope_q = "おすすめのレストランを教えてください"
+    print(f"  質問: 「{out_of_scope_q}」")
+    assistant = AccessControlledAssistant(user_role="partner")
+    assistant.start_session()
+    result = assistant.ask(out_of_scope_q)
+    if result.get("out_of_scope"):
+        print(f"    ⚠️  {result['answer']}")
+    else:
+        print(f"    回答: {result.get('answer', '')[:100]}...")
 
 
 def demo_quality_control():
