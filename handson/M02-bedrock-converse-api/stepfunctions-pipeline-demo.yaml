@@ -1,0 +1,401 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  モジュール 2: Step Functions パイプラインデモ
+  検証 → PII マスキング → Bedrock 分析 を Step Functions でオーケストレーション
+  並列処理パターン（複数レコード同時処理）のデモを含む
+  クリーンアップ: aws cloudformation delete-stack --stack-name stepfunctions-pipeline-demo
+
+Parameters:
+  ModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+    Description: 使用する Bedrock モデル ID
+
+Resources:
+  # ==========================================================================
+  # DynamoDB テーブル（処理結果保存）
+  # ==========================================================================
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: sfn-pipeline-results
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: record_id
+          AttributeType: S
+        - AttributeName: processed_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: record_id
+          KeyType: HASH
+        - AttributeName: processed_at
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: M02-StepFunctions
+
+  # ==========================================================================
+  # Lambda: 検証ステージ
+  # ==========================================================================
+  ValidationFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sfn-pipeline-validate
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt LambdaRole.Arn
+      Code:
+        ZipFile: |
+          """検証ステージ: 必須フィールドと形式をチェック"""
+          from datetime import datetime
+
+          REQUIRED_FIELDS = ["id", "content", "category", "language"]
+
+          def handler(event, context):
+              record = event
+              issues = []
+
+              for field in REQUIRED_FIELDS:
+                  if not record.get(field):
+                      issues.append(f"'{field}' が空または欠落")
+
+              if record.get("timestamp"):
+                  try:
+                      datetime.fromisoformat(record["timestamp"].replace("Z", "+00:00"))
+                  except ValueError:
+                      issues.append("タイムスタンプ形式不正")
+
+              content = record.get("content", "")
+              if len(content) > 10000:
+                  issues.append("コンテンツが長すぎます")
+
+              is_valid = len(issues) == 0
+              return {
+                  **record,
+                  "validation": {
+                      "valid": is_valid,
+                      "issues": issues,
+                      "score": (len(REQUIRED_FIELDS) - len(issues)) / len(REQUIRED_FIELDS) * 100
+                  }
+              }
+      Tags:
+        - Key: Project
+          Value: M02-StepFunctions
+
+  # ==========================================================================
+  # Lambda: PII マスキングステージ
+  # ==========================================================================
+  PiiMaskingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sfn-pipeline-pii-mask
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt LambdaRole.Arn
+      Code:
+        ZipFile: |
+          """PII マスキングステージ: 正規表現で PII を検出しマスキング"""
+          import re
+
+          PII_PATTERNS = {
+              "PHONE": r'0\d{1,4}-\d{1,4}-\d{3,4}',
+              "EMAIL": r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+              "MY_NUMBER": r'\d{12}',
+              "ADDRESS": r'(東京都|大阪府|北海道|.{2,3}県).{2,}[0-9\-]+',
+          }
+
+          def handler(event, context):
+              content = event.get("content", "")
+              entities = []
+
+              for pii_type, pattern in PII_PATTERNS.items():
+                  for match in re.finditer(pattern, content):
+                      entities.append({
+                          "type": pii_type,
+                          "text": match.group(),
+                          "begin": match.start(),
+                          "end": match.end()
+                      })
+
+              # マスキング（後ろから）
+              masked = content
+              for entity in sorted(entities, key=lambda x: x['begin'], reverse=True):
+                  masked = masked[:entity['begin']] + f"[{entity['type']}]" + masked[entity['end']:]
+
+              return {
+                  **event,
+                  "pii_masking": {
+                      "original_content": content,
+                      "masked_content": masked,
+                      "pii_count": len(entities),
+                      "entities": [{"type": e["type"], "text": e["text"]} for e in entities]
+                  }
+              }
+      Tags:
+        - Key: Project
+          Value: M02-StepFunctions
+
+  # ==========================================================================
+  # Lambda: Bedrock 分析ステージ
+  # ==========================================================================
+  BedrockAnalysisFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sfn-pipeline-bedrock-analyze
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 120
+      MemorySize: 256
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          MODEL_ID: !Ref ModelId
+      Code:
+        ZipFile: |
+          """Bedrock 分析ステージ: マスキング済みテキストを分析"""
+          import boto3
+          import os
+          import json
+
+          bedrock = boto3.client('bedrock-runtime')
+          MODEL_ID = os.environ['MODEL_ID']
+
+          def handler(event, context):
+              masked_content = event.get("pii_masking", {}).get("masked_content", "")
+              category = event.get("category", "general")
+
+              query = f"以下のフィードバックを分析し、JSON形式で回答してください。\n- カテゴリ確認\n- 対応優先度（高/中/低）\n- 要約（1文）\n\nフィードバック:\n{masked_content}"
+
+              response = bedrock.converse(
+                  modelId=MODEL_ID,
+                  messages=[{"role": "user", "content": [{"text": query}]}],
+                  system=[{"text": "ヘルスケア企業のフィードバック分析アシスタントです。JSON形式で回答してください。"}],
+                  inferenceConfig={"temperature": 0.3, "maxTokens": 256}
+              )
+
+              output = response['output']['message']['content'][0]['text']
+              usage = response['usage']
+
+              return {
+                  **event,
+                  "analysis": {
+                      "result": output,
+                      "input_tokens": usage['inputTokens'],
+                      "output_tokens": usage['outputTokens']
+                  }
+              }
+      Tags:
+        - Key: Project
+          Value: M02-StepFunctions
+
+  # ==========================================================================
+  # Lambda: 結果保存ステージ
+  # ==========================================================================
+  SaveResultFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: sfn-pipeline-save-result
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      Role: !GetAtt LambdaRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref ResultsTable
+      Code:
+        ZipFile: |
+          """結果保存ステージ: DynamoDB に処理結果を保存"""
+          import boto3
+          import os
+          import time
+          from datetime import datetime, timezone
+
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+
+          def handler(event, context):
+              now = datetime.now(timezone.utc).isoformat()
+
+              item = {
+                  'record_id': event.get('id', 'unknown'),
+                  'processed_at': now,
+                  'category': event.get('category', ''),
+                  'pii_count': event.get('pii_masking', {}).get('pii_count', 0),
+                  'masked_content': event.get('pii_masking', {}).get('masked_content', ''),
+                  'analysis': event.get('analysis', {}).get('result', ''),
+                  'input_tokens': event.get('analysis', {}).get('input_tokens', 0),
+                  'output_tokens': event.get('analysis', {}).get('output_tokens', 0),
+                  'validation_score': int(event.get('validation', {}).get('score', 0)),
+                  'ttl': int(time.time()) + 86400 * 7
+              }
+
+              table.put_item(Item=item)
+
+              return {
+                  "record_id": item['record_id'],
+                  "status": "saved",
+                  "processed_at": now
+              }
+      Tags:
+        - Key: Project
+          Value: M02-StepFunctions
+
+  # ==========================================================================
+  # IAM ロール: Lambda 共通
+  # ==========================================================================
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SfnPipelineLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PipelineAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/${ModelId}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt ResultsTable.Arn
+
+  # ==========================================================================
+  # IAM ロール: Step Functions
+  # ==========================================================================
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: SfnPipelineStepFunctionsRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt ValidationFunction.Arn
+                  - !GetAtt PiiMaskingFunction.Arn
+                  - !GetAtt BedrockAnalysisFunction.Arn
+                  - !GetAtt SaveResultFunction.Arn
+
+  # ==========================================================================
+  # Step Functions ステートマシン
+  # ==========================================================================
+  PipelineStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: data-processing-pipeline
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      Definition:
+        Comment: "データ処理パイプライン: 検証 → PII マスク → Bedrock 分析 → 保存"
+        StartAt: ProcessRecords
+        States:
+          ProcessRecords:
+            Type: Map
+            ItemsPath: "$.records"
+            MaxConcurrency: 3
+            Iterator:
+              StartAt: Validate
+              States:
+                Validate:
+                  Type: Task
+                  Resource: !GetAtt ValidationFunction.Arn
+                  Next: CheckValidation
+                  Catch:
+                    - ErrorEquals: ["States.ALL"]
+                      Next: RecordFailed
+                CheckValidation:
+                  Type: Choice
+                  Choices:
+                    - Variable: "$.validation.valid"
+                      BooleanEquals: true
+                      Next: MaskPII
+                  Default: RecordSkipped
+                MaskPII:
+                  Type: Task
+                  Resource: !GetAtt PiiMaskingFunction.Arn
+                  Next: AnalyzeWithBedrock
+                  Catch:
+                    - ErrorEquals: ["States.ALL"]
+                      Next: RecordFailed
+                AnalyzeWithBedrock:
+                  Type: Task
+                  Resource: !GetAtt BedrockAnalysisFunction.Arn
+                  Next: SaveResult
+                  Retry:
+                    - ErrorEquals: ["States.ALL"]
+                      IntervalSeconds: 2
+                      MaxAttempts: 2
+                      BackoffRate: 2
+                  Catch:
+                    - ErrorEquals: ["States.ALL"]
+                      Next: RecordFailed
+                SaveResult:
+                  Type: Task
+                  Resource: !GetAtt SaveResultFunction.Arn
+                  End: true
+                RecordSkipped:
+                  Type: Pass
+                  Result:
+                    status: "skipped"
+                    reason: "validation_failed"
+                  End: true
+                RecordFailed:
+                  Type: Pass
+                  Result:
+                    status: "error"
+                  End: true
+            End: true
+      Tags:
+        - Key: Project
+          Value: M02-StepFunctions
+
+Outputs:
+  StateMachineArn:
+    Value: !Ref PipelineStateMachine
+    Description: Step Functions ステートマシン ARN
+
+  StateMachineConsole:
+    Value: !Sub "https://${AWS::Region}.console.aws.amazon.com/states/home#/statemachines/view/${PipelineStateMachine}"
+    Description: Step Functions コンソール URL
+
+  ResultsTableName:
+    Value: !Ref ResultsTable
+    Description: 処理結果 DynamoDB テーブル名
+
+  StartExecutionCommand:
+    Value: !Sub |
+      aws stepfunctions start-execution \
+        --state-machine-arn ${PipelineStateMachine} \
+        --input '{"records":[{"id":"rec-001","timestamp":"2024-11-15T10:30:00Z","content":"田中太郎です。電話番号は090-1234-5678です。検査結果を教えてください。","category":"medical_inquiry","language":"ja"},{"id":"rec-002","timestamp":"2024-11-15T11:00:00Z","content":"予約の変更をお願いします。次回は来週の火曜日に変更したいです。","category":"appointment","language":"ja"}]}' \
+        --region ${AWS::Region}
+    Description: テスト実行コマンド
+
+  DeleteStack:
+    Value: !Sub "aws cloudformation delete-stack --stack-name stepfunctions-pipeline-demo --region ${AWS::Region}"
+    Description: スタック削除コマンド

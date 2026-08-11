@@ -193,6 +193,101 @@ aws cloudformation delete-stack --stack-name data-processing-demo
 
 ---
 
+## パート 4b: Step Functions によるオーケストレーション（15分）
+
+### ステップ 4b.1: Step Functions パイプラインのデプロイ
+
+Step Functions を使って、検証 → PII マスク → Bedrock 分析 → 保存のパイプラインをオーケストレーションします：
+
+```bash
+aws cloudformation create-stack \
+  --stack-name stepfunctions-pipeline-demo \
+  --template-body file://stepfunctions-pipeline-demo.yaml \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --region us-east-1
+```
+
+スタック作成完了を待ちます（3〜4分）：
+
+```bash
+aws cloudformation wait stack-create-complete --stack-name stepfunctions-pipeline-demo
+```
+
+### ステップ 4b.2: パイプラインの構造を確認
+
+ステートマシンの処理フロー：
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ Validate │───▶│ PII Mask │───▶│ Bedrock  │───▶│  Save    │
+│          │    │          │    │ Analyze  │    │ (DynDB)  │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘
+     │
+     │ 検証失敗
+     ▼
+┌──────────┐
+│ Skipped  │
+└──────────┘
+```
+
+ポイント：
+- **Map ステート**: 複数レコードを並列処理（MaxConcurrency=3）
+- **Choice ステート**: 検証結果に応じて分岐
+- **Retry**: Bedrock 呼び出し失敗時に自動リトライ（最大2回、指数バックオフ）
+- **Catch**: エラー時はスキップして他のレコード処理を継続
+
+### ステップ 4b.3: パイプラインの実行
+
+デモスクリプトを実行します：
+
+```bash
+python3.12 stepfunctions_demo.py
+```
+
+または、AWS CLI で直接実行：
+
+```bash
+STATE_MACHINE_ARN=$(aws cloudformation describe-stacks \
+  --stack-name stepfunctions-pipeline-demo \
+  --query "Stacks[0].Outputs[?OutputKey=='StateMachineArn'].OutputValue" \
+  --output text)
+
+aws stepfunctions start-execution \
+  --state-machine-arn $STATE_MACHINE_ARN \
+  --input '{"records":[{"id":"rec-001","timestamp":"2024-11-15T10:30:00Z","content":"田中太郎です。電話番号は090-1234-5678です。","category":"medical_inquiry","language":"ja"}]}'
+```
+
+### ステップ 4b.4: コンソールで実行フローを確認
+
+Step Functions コンソールでステートマシンの実行状態を可視化します：
+
+```bash
+echo "https://us-east-1.console.aws.amazon.com/states/home"
+```
+
+確認ポイント：
+- 各ステートの成功/失敗が色分けで表示される
+- 検証失敗したレコード（rec-004）が「Skipped」に分岐している
+- 入出力データが各ステートで確認できる
+
+### ステップ 4b.5: SQS 方式との比較
+
+| 観点 | SQS + Lambda（パート4） | Step Functions（パート4b） |
+|------|------------------------|--------------------------|
+| 処理フロー | 単一 Lambda 内で順次 | ステートごとに独立 Lambda |
+| 可視化 | CloudWatch ログのみ | コンソールでリアルタイム |
+| エラー処理 | コード内で実装 | 宣言的（Retry/Catch） |
+| 並列制御 | Lambda 同時実行数 | Map の MaxConcurrency |
+| 適したケース | 高スループット | 複雑なワークフロー |
+
+### ステップ 4b.6: クリーンアップ
+
+```bash
+aws cloudformation delete-stack --stack-name stepfunctions-pipeline-demo
+```
+
+---
+
 ## デモ手順
 
 ### デモ 1: データ品質検証（5分）
@@ -219,6 +314,13 @@ aws cloudformation delete-stack --stack-name data-processing-demo
 3. `glue_data_quality_demo.py` を実行（事前に評価を開始しておくと時短）
 4. 合格/不合格の結果と総合スコアを表示
 5. 本番では Glue ETL パイプラインに組み込み自動化されることを説明
+
+### デモ 5: Step Functions パイプライン（5分）
+1. ステートマシンの構造（検証→PII→Bedrock→保存）を説明
+2. `stepfunctions_demo.py` を実行（事前にスタックデプロイ済み）
+3. コンソールで実行フローを表示（成功/スキップ/エラーの色分け）
+4. 検証失敗レコードが自動でスキップされる分岐を確認
+5. SQS 方式との使い分けを説明
 
 ---
 
@@ -310,6 +412,7 @@ aws cloudformation delete-stack --stack-name glue-data-quality-demo
 # ローカル実行のためクリーンアップは不要
 # AWS リソースを作成した場合:
 aws cloudformation delete-stack --stack-name data-processing-demo
+aws cloudformation delete-stack --stack-name stepfunctions-pipeline-demo
 aws cloudformation delete-stack --stack-name glue-data-quality-demo
 ```
 
