@@ -106,11 +106,87 @@ def setup_cloudwatch_logs():
 # ステップ 3: Bedrock モデル呼び出しログの有効化
 # ============================================================
 
+def ensure_bedrock_logging_role():
+    """Bedrock がログ配信に使用する IAM ロールを作成/確認"""
+    role_name = "BedrockLoggingRole"
+    role_arn = f"arn:aws:iam::{ACCOUNT_ID}:role/{role_name}"
+
+    trust_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {"Service": "bedrock.amazonaws.com"},
+                "Action": "sts:AssumeRole",
+                "Condition": {
+                    "StringEquals": {"aws:SourceAccount": ACCOUNT_ID},
+                    "ArnLike": {
+                        "aws:SourceArn": f"arn:aws:bedrock:us-east-1:{ACCOUNT_ID}:*"
+                    }
+                }
+            }
+        ]
+    }
+
+    inline_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents",
+                ],
+                "Resource": f"arn:aws:logs:us-east-1:{ACCOUNT_ID}:log-group:{LOG_GROUP}:*"
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "s3:PutObject",
+                ],
+                "Resource": f"arn:aws:s3:::{S3_BUCKET}/bedrock-logs/*"
+            },
+        ]
+    }
+
+    try:
+        iam.get_role(RoleName=role_name)
+        print(f"  ℹ️  IAM ロール既存: {role_name}")
+    except iam.exceptions.NoSuchEntityException:
+        iam.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=json.dumps(trust_policy),
+            Description="Bedrock model invocation logging role",
+            Tags=[
+                {'Key': 'Project', 'Value': 'GenAI-Monitoring'},
+                {'Key': 'Module', 'Value': 'M08'},
+            ]
+        )
+        print(f"  ✅ IAM ロール作成: {role_name}")
+
+    # インラインポリシーを更新（冪等）
+    iam.put_role_policy(
+        RoleName=role_name,
+        PolicyName="BedrockLoggingPolicy",
+        PolicyDocument=json.dumps(inline_policy)
+    )
+    print(f"     ポリシー設定完了: CloudWatch Logs + S3 書き込み権限")
+
+    # ロール作成直後は伝播に時間がかかる
+    print(f"     IAM 伝播待機中（10秒）...")
+    time.sleep(10)
+
+    return role_arn
+
+
 def setup_model_invocation_logging():
     """Bedrock モデル呼び出しログを S3 と CloudWatch Logs の両方に出力"""
     print("\n" + "─" * 70)
     print("  ステップ 3: Bedrock モデル呼び出しログの有効化")
     print("─" * 70)
+
+    # IAM ロールを確保
+    role_arn = ensure_bedrock_logging_role()
 
     logging_config = {
         "textDataDeliveryEnabled": True,
@@ -122,7 +198,7 @@ def setup_model_invocation_logging():
         },
         "cloudWatchConfig": {
             "logGroupName": LOG_GROUP,
-            "roleArn": f"arn:aws:iam::{ACCOUNT_ID}:role/BedrockLoggingRole",
+            "roleArn": role_arn,
             "largeDataDeliveryS3Config": {
                 "bucketName": S3_BUCKET,
                 "keyPrefix": "bedrock-logs/large-data/"
