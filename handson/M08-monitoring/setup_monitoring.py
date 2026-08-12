@@ -28,7 +28,7 @@ LOG_GROUP = "/aws/bedrock/model-invocations"
 DASHBOARD_NAME = "Bedrock-GenAI-Monitoring"
 SNS_TOPIC_NAME = "bedrock-monitoring-alerts"
 NAMESPACE = "GenAI/Bedrock"
-MODEL_ID = "amazon.nova-pro-v1:0"
+MODEL_ID = "amazon.nova-lite-v1:0"
 
 
 # ============================================================
