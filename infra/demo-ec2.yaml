@@ -251,6 +251,7 @@ Resources:
           tar -xzf /tmp/handson.tar.gz -C $WORK_DIR --strip-components=1
           rm -f /tmp/handson.tar.gz
           chown -R ssm-user:ssm-user /home/ssm-user
+          chmod -R 755 /home/ssm-user/handson
 
           # デモ用リソース準備
           echo "[6/6] デモ用リソース準備..."
