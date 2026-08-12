@@ -28,6 +28,7 @@ LOG_GROUP = "/aws/bedrock/model-invocations"
 DASHBOARD_NAME = "Bedrock-GenAI-Monitoring"
 SNS_TOPIC_NAME = "bedrock-monitoring-alerts"
 NAMESPACE = "GenAI/Bedrock"
+MODEL_ID = "amazon.nova-pro-v1:0"
 
 
 # ============================================================
@@ -397,11 +398,11 @@ def setup_dashboard():
                     "title": "トークン使用量",
                     "region": "us-east-1",
                     "metrics": [
-                        [NAMESPACE, "InputTokensPerRequest", {"stat": "Average", "label": "入力トークン（平均）"}],
-                        [NAMESPACE, "OutputTokensPerRequest", {"stat": "Average", "label": "出力トークン（平均）"}],
-                        [NAMESPACE, "InputTokensPerRequest", {"stat": "Sum", "label": "入力トークン（合計）", "yAxis": "right"}],
+                        [NAMESPACE, "InputTokensPerRequest", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Average", "label": "入力トークン（平均）"}],
+                        [NAMESPACE, "OutputTokensPerRequest", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Average", "label": "出力トークン（平均）"}],
+                        [NAMESPACE, "InputTokensPerRequest", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Sum", "label": "入力トークン（合計）", "yAxis": "right"}],
                     ],
-                    "period": 300,
+                    "period": 60,
                     "view": "timeSeries",
                 }
             },
@@ -413,11 +414,11 @@ def setup_dashboard():
                     "title": "モデルレイテンシー (ms)",
                     "region": "us-east-1",
                     "metrics": [
-                        [NAMESPACE, "ModelLatency", {"stat": "p50", "label": "P50"}],
-                        [NAMESPACE, "ModelLatency", {"stat": "p95", "label": "P95"}],
-                        [NAMESPACE, "ModelLatency", {"stat": "p99", "label": "P99"}],
+                        [NAMESPACE, "ModelLatency", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "p50", "label": "P50"}],
+                        [NAMESPACE, "ModelLatency", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "p95", "label": "P95"}],
+                        [NAMESPACE, "ModelLatency", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "p99", "label": "P99"}],
                     ],
-                    "period": 300,
+                    "period": 60,
                     "view": "timeSeries",
                     "annotations": {
                         "horizontal": [
@@ -434,9 +435,9 @@ def setup_dashboard():
                     "title": "推定コスト (USD)",
                     "region": "us-east-1",
                     "metrics": [
-                        [NAMESPACE, "EstimatedCost", {"stat": "Sum", "label": "推定コスト", "period": 3600}],
+                        [NAMESPACE, "EstimatedCost", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Sum", "label": "推定コスト"}],
                     ],
-                    "period": 3600,
+                    "period": 300,
                     "view": "timeSeries",
                 }
             },
@@ -448,11 +449,11 @@ def setup_dashboard():
                     "title": "応答品質メトリクス",
                     "region": "us-east-1",
                     "metrics": [
-                        [NAMESPACE, "HallucinationRate", {"stat": "Average", "label": "ハルシネーション率 (%)"}],
-                        [NAMESPACE, "FaithfulnessScore", {"stat": "Average", "label": "忠実性スコア"}],
-                        [NAMESPACE, "AnswerRelevancy", {"stat": "Average", "label": "回答関連性"}],
+                        [NAMESPACE, "HallucinationRate", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Average", "label": "ハルシネーション率 (%)"}],
+                        [NAMESPACE, "FaithfulnessScore", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Average", "label": "忠実性スコア"}],
+                        [NAMESPACE, "AnswerRelevancy", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Average", "label": "回答関連性"}],
                     ],
-                    "period": 600,
+                    "period": 60,
                     "view": "timeSeries",
                     "annotations": {
                         "horizontal": [
@@ -470,10 +471,10 @@ def setup_dashboard():
                     "title": "エラー率 & リクエスト数",
                     "region": "us-east-1",
                     "metrics": [
-                        [NAMESPACE, "ErrorRate", {"stat": "Average", "label": "エラー率 (%)"}],
-                        [NAMESPACE, "RequestCount", {"stat": "Sum", "label": "リクエスト数", "yAxis": "right"}],
+                        [NAMESPACE, "ErrorRate", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Average", "label": "エラー率 (%)"}],
+                        [NAMESPACE, "RequestCount", "Environment", "demo", "ModelId", MODEL_ID, {"stat": "Sum", "label": "リクエスト数", "yAxis": "right"}],
                     ],
-                    "period": 300,
+                    "period": 60,
                     "view": "timeSeries",
                 }
             },
@@ -485,11 +486,11 @@ def setup_dashboard():
                     "title": "ビジネスメトリクス",
                     "region": "us-east-1",
                     "metrics": [
-                        [NAMESPACE, "TaskCompletionRate", {"stat": "Average", "label": "タスク完了率 (%)"}],
-                        [NAMESPACE, "UserSatisfactionScore", {"stat": "Average", "label": "ユーザー満足度"}],
-                        [NAMESPACE, "EscalationRate", {"stat": "Average", "label": "エスカレーション率 (%)"}],
+                        [NAMESPACE, "TaskCompletionRate", "Environment", "demo", "Service", "CustomerAssistant", {"stat": "Average", "label": "タスク完了率 (%)"}],
+                        [NAMESPACE, "UserSatisfactionScore", "Environment", "demo", "Service", "CustomerAssistant", {"stat": "Average", "label": "ユーザー満足度"}],
+                        [NAMESPACE, "EscalationRate", "Environment", "demo", "Service", "CustomerAssistant", {"stat": "Average", "label": "エスカレーション率 (%)"}],
                     ],
-                    "period": 3600,
+                    "period": 60,
                     "view": "timeSeries",
                 }
             },
