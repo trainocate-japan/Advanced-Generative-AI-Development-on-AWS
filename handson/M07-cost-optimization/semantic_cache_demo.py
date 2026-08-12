@@ -201,7 +201,7 @@ def demo_comparison():
     ]
 
     exact_cache = ExactMatchCache()
-    semantic_cache = SemanticCache(similarity_threshold=0.85)
+    semantic_cache = SemanticCache(similarity_threshold=0.55)
 
     print(f"{'─' * 70}")
     print(f"  {'クエリ':<30} │ {'完全一致':<10} │ {'セマンティック':<14} │ {'類似度'}")
@@ -263,10 +263,14 @@ def demo_threshold_tuning():
   ┌────────────┬────────────────────┬──────────────────────────────┐
   │ しきい値   │ 特性               │ ユースケース                 │
   ├────────────┼────────────────────┼──────────────────────────────┤
-  │ 0.95以上   │ 高精度・低ヒット率 │ 医療・金融（誤答リスク大）   │
-  │ 0.85前後   │ バランス（推奨）   │ 一般的なカスタマーサポート   │
-  │ 0.75以下   │ 低精度・高ヒット率 │ FAQ・定型応答                │
+  │ 0.75以上   │ 高精度・低ヒット率 │ 医療・金融（誤答リスク大）   │
+  │ 0.55前後   │ バランス（推奨）   │ 一般的なカスタマーサポート   │
+  │ 0.40以下   │ 低精度・高ヒット率 │ FAQ・定型応答                │
   └────────────┴────────────────────┴──────────────────────────────┘
+
+  ※ Titan Embeddings V2 の日本語では、同義の表現でも
+    コサイン類似度が英語より低めに出る傾向があります。
+    しきい値は言語・モデルに応じたチューニングが必要です。
 """)
 
     # 基準クエリをキャッシュに登録
@@ -287,27 +291,28 @@ def demo_threshold_tuning():
     base_embedding = cache.get_embedding(base_query)
 
     print(f"{'─' * 70}")
-    print(f"  {'テストクエリ':<30} │ {'類似度':<8} │ 0.95 │ 0.85 │ 0.75")
+    print(f"  {'テストクエリ':<30} │ {'類似度':<8} │ 0.75 │ 0.55 │ 0.40")
     print(f"{'─' * 70}")
 
     for query, description in test_queries:
         query_embedding = cache.get_embedding(query)
         similarity = cache.cosine_similarity(base_embedding, query_embedding)
 
-        hit_95 = "✅" if similarity >= 0.95 else "❌"
-        hit_85 = "✅" if similarity >= 0.85 else "❌"
         hit_75 = "✅" if similarity >= 0.75 else "❌"
+        hit_55 = "✅" if similarity >= 0.55 else "❌"
+        hit_40 = "✅" if similarity >= 0.40 else "❌"
 
-        print(f"  {query:<30} │ {similarity:.4f} │  {hit_95}  │  {hit_85}  │  {hit_75}")
+        print(f"  {query:<30} │ {similarity:.4f} │  {hit_75}  │  {hit_55}  │  {hit_40}")
         print(f"  {'(' + description + ')':<30} │")
 
         time.sleep(0.5)
 
     print(f"{'─' * 70}")
     print(f"\n  📊 しきい値選択の指針:")
-    print(f"     • 誤った応答のコスト > API呼び出しのコスト → 高しきい値（0.90+）")
-    print(f"     • API呼び出しコスト削減が最優先 → 低しきい値（0.80-）")
-    print(f"     • 推奨: 0.85 から開始し、誤ヒット率を監視しながら調整")
+    print(f"     • 誤った応答のコスト > API呼び出しのコスト → 高しきい値（0.70+）")
+    print(f"     • API呼び出しコスト削減が最優先 → 低しきい値（0.50-）")
+    print(f"     • 推奨: 0.55 から開始し、誤ヒット率を監視しながら調整")
+    print(f"     • 日本語の場合、英語より低めのしきい値が適切です")
 
 
 # ============================================================
