@@ -43,17 +43,12 @@ def setup_s3_bucket():
     try:
         s3.create_bucket(
             Bucket=S3_BUCKET,
-            CreateBucketConfiguration={'LocationConstraint': 'us-east-1'}
         )
     except s3.exceptions.BucketAlreadyOwnedByYou:
         print(f"  ℹ️  バケット既存: {S3_BUCKET}")
     except Exception as e:
-        # us-east-1 では LocationConstraint 不要な場合がある
-        if "IllegalLocationConstraintException" in str(e):
-            try:
-                s3.create_bucket(Bucket=S3_BUCKET)
-            except s3.exceptions.BucketAlreadyOwnedByYou:
-                pass
+        if "BucketAlreadyOwnedByYou" in str(e):
+            print(f"  ℹ️  バケット既存: {S3_BUCKET}")
         else:
             raise
 
