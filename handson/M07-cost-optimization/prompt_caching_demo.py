@@ -97,8 +97,8 @@ def calculate_cost(usage):
     """トークン使用量からコストを計算"""
     input_tokens = usage.get('inputTokens', 0)
     output_tokens = usage.get('outputTokens', 0)
-    cache_read = usage.get('cacheReadInputTokenCount', 0)
-    cache_write = usage.get('cacheWriteInputTokenCount', 0)
+    cache_read = usage.get('cacheReadInputTokens', 0)
+    cache_write = usage.get('cacheWriteInputTokens', 0)
 
     # キャッシュ分は入力トークンから差し引いて計算
     regular_input = input_tokens - cache_read - cache_write
@@ -116,8 +116,8 @@ def print_usage(usage, label, elapsed_time):
     """トークン使用量とコストを整形表示"""
     input_tokens = usage.get('inputTokens', 0)
     output_tokens = usage.get('outputTokens', 0)
-    cache_read = usage.get('cacheReadInputTokenCount', 0)
-    cache_write = usage.get('cacheWriteInputTokenCount', 0)
+    cache_read = usage.get('cacheReadInputTokens', 0)
+    cache_write = usage.get('cacheWriteInputTokens', 0)
     cost = calculate_cost(usage)
 
     print(f"\n  📊 {label}")
@@ -225,7 +225,7 @@ def demo_cache_write():
         print_usage(usage, "キャッシュ書き込み使用量", elapsed)
 
         # 書き込みプレミアムの説明
-        cache_write = usage.get('cacheWriteInputTokenCount', 0)
+        cache_write = usage.get('cacheWriteInputTokens', 0)
         if cache_write > 0:
             print(f"\n  💡 キャッシュ書き込み発生: {cache_write:,} トークンがキャッシュされました")
             print("     初回は書き込みプレミアム（入力の1.2倍）が加算されます")
@@ -282,7 +282,7 @@ def demo_cache_hit():
             print_usage(usage, f"キャッシュヒット使用量（質問{i}）", elapsed)
             results.append((usage, elapsed))
 
-            cache_read = usage.get('cacheReadInputTokenCount', 0)
+            cache_read = usage.get('cacheReadInputTokens', 0)
             if cache_read > 0:
                 print(f"\n  ✅ キャッシュヒット! {cache_read:,} トークンをキャッシュから読み取り")
                 print(f"     キャッシュ読み取り料金は通常入力の 25% → 75%コスト削減")
