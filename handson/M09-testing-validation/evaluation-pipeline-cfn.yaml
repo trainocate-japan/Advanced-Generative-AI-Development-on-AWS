@@ -417,7 +417,7 @@ Resources:
               "Parameters": {
                 "TopicArn": "${EvalAlertTopic}",
                 "Subject": "⚠ AI評価パイプライン - 品質低下検出",
-                "Message.$": "States.Format('品質しきい値を下回りました。\\n\\n総合スコア: {}\\n合格率: {}\\n\\n詳細はCloudWatchダッシュボードを確認してください。', $.aggregated.summary.overall_score, $.aggregated.summary.pass_rate)"
+                "Message.$": "States.Format('品質しきい値を下回りました。\\n\\n合格率: {}\\n\\n詳細はCloudWatchダッシュボードを確認してください。', $.aggregated.summary.pass_rate)"
               },
               "ResultPath": "$.alertResult",
               "Next": "PublishMetrics"
