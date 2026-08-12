@@ -110,11 +110,6 @@ def detect_and_mask_pii(text):
 # =============================================================================
 def process_with_bedrock(text, system_prompt="", use_optimization=False):
     """Bedrock Converse API でテキストを処理する"""
-    if use_optimization:
-        # プロンプト圧縮: 冗長表現を削減
-        text = text.replace("以下の内容について詳しく分析して、わかりやすく説明してください。", "以下を分析:")
-        text = text.replace("可能であれば具体的な例を挙げて説明してください", "具体例を含めて")
-
     messages = [{"role": "user", "content": [{"text": text}]}]
 
     kwargs = {
@@ -175,10 +170,15 @@ def run_pipeline(records, use_optimization=False):
         stage_results["pii_count"] = pii_result["pii_count"]
 
         # ステージ 3: Bedrock 処理（マスキング済みテキストを使用）
-        query = f"以下のフィードバックを分析し、カテゴリと対応優先度（高/中/低）を判定してください。\n\n{pii_result['masked']}"
-        system = "あなたはヘルスケア企業のフィードバック分析アシスタントです。JSON形式で回答してください。"
+        if use_optimization:
+            # 最適化版: 簡潔なプロンプト + JSON出力指示のみ
+            query = f"分析対象:\n{pii_result['masked']}\n\nカテゴリと優先度(高/中/低)をJSON出力。"
+            system = "フィードバック分析AI。JSON形式: {{\"category\":...,\"priority\":...,\"reason\":...}}"
+        else:
+            query = f"以下のフィードバックを分析し、カテゴリと対応優先度（高/中/低）を判定してください。\n\n{pii_result['masked']}"
+            system = "あなたはヘルスケア企業のフィードバック分析アシスタントです。JSON形式で回答してください。"
 
-        bedrock_result = process_with_bedrock(query, system_prompt=system, use_optimization=use_optimization)
+        bedrock_result = process_with_bedrock(query, system_prompt=system)
         stage_results["bedrock_latency"] = bedrock_result["latency"]
         stage_results["input_tokens"] = bedrock_result["input_tokens"]
         stage_results["output_tokens"] = bedrock_result["output_tokens"]
