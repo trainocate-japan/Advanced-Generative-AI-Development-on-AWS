@@ -25,7 +25,7 @@ import sys
 
 REGION = "us-east-1"
 GUARDRAIL_NAME = "health-chatbot-guardrail"
-MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0"
+MODEL_ID = "us.anthropic.claude-3-haiku-20240307-v1:0"
 
 bedrock = boto3.client("bedrock", region_name=REGION)
 bedrock_runtime = boto3.client("bedrock-runtime", region_name=REGION)
@@ -78,6 +78,23 @@ def call_with_guardrail(guardrail_id, guardrail_version, user_message, system_pr
         return {"error": str(e)}
 
 
+def print_assessment_entry(policy_name, policy_detail):
+    """アセスメントの個別エントリを安全に表示"""
+    if policy_name == "invocationMetrics":
+        return
+    print(f"        {policy_name}:")
+    if isinstance(policy_detail, dict):
+        print_policy_detail(policy_detail)
+    elif isinstance(policy_detail, list):
+        for item in policy_detail:
+            if isinstance(item, dict):
+                print_policy_detail(item)
+            else:
+                print(f"          {item}")
+    else:
+        print(f"          {policy_detail}")
+
+
 def print_result(response):
     """レスポンスを整形表示"""
     if "error" in response:
@@ -112,21 +129,21 @@ def print_result(response):
         # 入力アセスメント
         if input_assessment:
             print(f"\n      [入力アセスメント]")
-            for policy_name, policy_detail in input_assessment.items():
-                if policy_name == "invocationMetrics":
-                    continue
-                print(f"        {policy_name}:")
-                print_policy_detail(policy_detail)
+            if isinstance(input_assessment, dict):
+                for policy_name, policy_detail in input_assessment.items():
+                    print_assessment_entry(policy_name, policy_detail)
+            else:
+                print(f"        {input_assessment}")
 
         # 出力アセスメント
         if output_assessments:
             print(f"\n      [出力アセスメント]")
             for assessment in output_assessments:
-                for policy_name, policy_detail in assessment.items():
-                    if policy_name == "invocationMetrics":
-                        continue
-                    print(f"        {policy_name}:")
-                    print_policy_detail(policy_detail)
+                if isinstance(assessment, dict):
+                    for policy_name, policy_detail in assessment.items():
+                        print_assessment_entry(policy_name, policy_detail)
+                else:
+                    print(f"        {assessment}")
 
 
 def print_policy_detail(detail):

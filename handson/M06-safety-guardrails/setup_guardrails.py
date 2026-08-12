@@ -75,7 +75,7 @@ def create_guardrail():
         print(f"      Status: {detail.get('status')}")
         return detail
 
-    # ----- コンテンツフィルター設定 -----
+    # ----- コンテンツフィルター設定（Standard ティア: 日本語対応） -----
     content_policy = {
         "filtersConfig": [
             {
@@ -108,10 +108,13 @@ def create_guardrail():
                 "inputStrength": "HIGH",
                 "outputStrength": "NONE",
             },
-        ]
+        ],
+        "tierConfig": {
+            "tierName": "STANDARD",
+        },
     }
 
-    # ----- 拒否トピック設定 -----
+    # ----- 拒否トピック設定（Standard ティア: 日本語対応） -----
     topic_policy = {
         "topicsConfig": [
             {
@@ -147,7 +150,10 @@ def create_guardrail():
                 ],
                 "type": "DENY",
             },
-        ]
+        ],
+        "tierConfig": {
+            "tierName": "STANDARD",
+        },
     }
 
     # ----- 単語フィルター設定 -----
@@ -173,7 +179,7 @@ def create_guardrail():
         ],
     }
 
-    # Guardrail 作成
+    # Guardrail 作成（Standard ティア + クロスリージョン推論）
     response = bedrock.create_guardrail(
         name=GUARDRAIL_NAME,
         description="医療系チャットボット向け安全性ガードレール - "
@@ -182,6 +188,9 @@ def create_guardrail():
         contentPolicyConfig=content_policy,
         wordPolicyConfig=word_policy,
         sensitiveInformationPolicyConfig=sensitive_info_policy,
+        crossRegionConfig={
+            "guardrailProfileIdentifier": "us.guardrail.v1:0",
+        },
         blockedInputMessaging=(
             "申し訳ありませんが、このリクエストにはお応えできません。"
             "当システムは一般的な健康情報の提供のみを行っており、"
