@@ -383,11 +383,11 @@ python3.12 bias_detection.py
 ## クリーンアップ
 
 ```bash
-# ローカル実行のためクリーンアップは最小限
-# prompt_management.py は自動でリソースを削除します
-# 手動でBedrock プロンプト管理のリソースを削除する場合:
-# AWS コンソール → Bedrock → プロンプト管理 → 該当プロンプトを削除
+cd ~/handson
+./cleanup_all.sh
 ```
+
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

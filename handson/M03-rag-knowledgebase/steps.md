@@ -496,16 +496,11 @@ python3.12 chunking_optimization.py
 ## クリーンアップ
 
 ```bash
-# ナレッジベースの削除（データソース→KB→ベクトルインデックス→ベクトルバケットの順）
-python3.12 cleanup.py
-
-# ドキュメント用 S3 バケットの削除
-aws s3 rb s3://legal-kb-demo-$(aws sts get-caller-identity --query Account --output text) --force
-
-# S3 ベクトルバケットの削除
-aws s3vectors delete-index --vector-bucket-name legal-vectors-demo --index-name legal-docs-index
-aws s3vectors delete-vector-bucket --vector-bucket-name legal-vectors-demo
+cd ~/handson
+./cleanup_all.sh
 ```
+
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

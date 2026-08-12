@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  M10 Enterprise Integration Pattern - VPC Endpoint for Bedrock
+  プライベートサブネットから Bedrock にアクセスするためのネットワーク構成
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: "10.0.0.0/16"
+    Description: VPC の CIDR ブロック
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: "10.0.1.0/24"
+    Description: プライベートサブネット 1 の CIDR
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: "10.0.2.0/24"
+    Description: プライベートサブネット 2 の CIDR
+
+Resources:
+  # =============================================================
+  # VPC とサブネット
+  # =============================================================
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpc"
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private-1"
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private-2"
+
+  # プライベートサブネット用ルートテーブル
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-private-rt"
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # =============================================================
+  # セキュリティグループ（VPC エンドポイント用）
+  # =============================================================
+  VpcEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Bedrock VPC Endpoint
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        # VPC 内からの HTTPS アクセスのみ許可
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+          Description: "Allow HTTPS from VPC"
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: "0.0.0.0/0"
+          Description: "Allow all outbound"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-vpce-sg"
+
+  # Lambda 用セキュリティグループ
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions accessing Bedrock
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          DestinationSecurityGroupId: !Ref VpcEndpointSecurityGroup
+          Description: "Allow HTTPS to VPC Endpoint"
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-lambda-sg"
+
+  # =============================================================
+  # VPC エンドポイント（Bedrock Runtime）
+  # =============================================================
+  BedrockRuntimeEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.bedrock-runtime"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - "bedrock:InvokeModel"
+              - "bedrock:InvokeModelWithResponseStream"
+              - "bedrock:Converse"
+              - "bedrock:ConverseStream"
+            Resource:
+              - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/*"
+            Condition:
+              StringEquals:
+                "aws:PrincipalAccount": !Ref AWS::AccountId
+
+  # =============================================================
+  # VPC エンドポイント（Bedrock コントロールプレーン）
+  # =============================================================
+  BedrockControlEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.bedrock"
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VpcEndpointSecurityGroup
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action:
+              - "bedrock:ListFoundationModels"
+              - "bedrock:GetFoundationModel"
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:PrincipalAccount": !Ref AWS::AccountId
+
+  # =============================================================
+  # サンプル Lambda（VPC 内から Bedrock にアクセス）
+  # =============================================================
+  VpcLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-vpc-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: BedrockAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:Converse
+                Resource:
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0"
+
+  PrivateBedrockFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-private-bedrock"
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 256
+      Role: !GetAtt VpcLambdaExecutionRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+      Environment:
+        Variables:
+          MODEL_ID: amazon.nova-lite-v1:0
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+
+          # VPC Endpoint 経由で Bedrock にアクセス
+          # PrivateDnsEnabled=true のため、通常のエンドポイント URL で自動的にルーティングされる
+          bedrock = boto3.client("bedrock-runtime")
+
+          def handler(event, context):
+              """VPC 内から Bedrock を呼び出すデモ"""
+              import os
+              model_id = os.environ["MODEL_ID"]
+
+              response = bedrock.converse(
+                  modelId=model_id,
+                  messages=[
+                      {
+                          "role": "user",
+                          "content": [{"text": "Hello from a private subnet!"}],
+                      }
+                  ],
+                  inferenceConfig={"maxTokens": 256},
+              )
+
+              return {
+                  "statusCode": 200,
+                  "body": json.dumps({
+                      "message": response["output"]["message"]["content"][0]["text"],
+                      "note": "This request was routed through VPC Endpoint (no internet access)",
+                  }, ensure_ascii=False),
+              }
+
+Outputs:
+  VpcId:
+    Description: VPC ID
+    Value: !Ref Vpc
+
+  BedrockRuntimeEndpointId:
+    Description: Bedrock Runtime VPC Endpoint ID
+    Value: !Ref BedrockRuntimeEndpoint
+
+  BedrockControlEndpointId:
+    Description: Bedrock Control Plane VPC Endpoint ID
+    Value: !Ref BedrockControlEndpoint
+
+  PrivateSubnetIds:
+    Description: プライベートサブネット ID
+    Value: !Sub "${PrivateSubnet1}, ${PrivateSubnet2}"
+
+  LambdaFunctionArn:
+    Description: VPC 内 Lambda 関数 ARN
+    Value: !GetAtt PrivateBedrockFunction.Arn
+
+  SecurityGroupId:
+    Description: VPC Endpoint 用セキュリティグループ ID
+    Value: !Ref VpcEndpointSecurityGroup
+
+  NetworkDiagram:
+    Description: ネットワーク構成の概要
+    Value: >
+      [Lambda in Private Subnet]
+        --> [ENI (Lambda SG: port 443 outbound)]
+          --> [VPC Endpoint ENI (VPCE SG: port 443 inbound from VPC)]
+            --> [Bedrock Runtime Service (via AWS PrivateLink)]
+      * インターネットゲートウェイ/NAT ゲートウェイ不要
+      * Private DNS 有効のため通常の bedrock-runtime.{region}.amazonaws.com で接続可能

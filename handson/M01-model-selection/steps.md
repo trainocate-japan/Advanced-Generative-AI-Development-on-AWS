@@ -360,8 +360,11 @@ LLM as a Judge では、別のLLM（審査員モデル）が応答品質を評�
 ## クリーンアップ
 
 ```bash
-sam delete --stack-name m01
+cd ~/handson
+./cleanup_all.sh
 ```
+
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

@@ -464,12 +464,11 @@ aws cloudformation delete-stack --stack-name glue-data-quality-demo
 ## クリーンアップ
 
 ```bash
-# ローカル実行のためクリーンアップは不要
-# AWS リソースを作成した場合:
-aws cloudformation delete-stack --stack-name data-processing-demo
-aws cloudformation delete-stack --stack-name stepfunctions-pipeline-demo
-aws cloudformation delete-stack --stack-name glue-data-quality-demo
+cd ~/handson
+./cleanup_all.sh
 ```
+
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

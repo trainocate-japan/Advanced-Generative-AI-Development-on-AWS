@@ -260,14 +260,11 @@ python3.12 custom_scoring.py --query "知的財産権" --filter-category "contra
 ## クリーンアップ
 
 ```bash
-python3.12 cleanup.py
+cd ~/handson
+./cleanup_all.sh
 ```
 
-以下のリソースを削除します：
-- OpenSearch Serverless コレクション
-- 暗号化ポリシー
-- ネットワークポリシー
-- データアクセスポリシー
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

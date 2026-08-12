@@ -286,18 +286,11 @@ python3.12 framework_crewai.py
 ## クリーンアップ
 
 ```bash
-# 各デモの --cleanup オプションで個別削除
-python3.12 agentcore_gateway_demo.py --cleanup
-python3.12 agentcore_memory_demo.py --cleanup
-python3.12 agentcore_identity_demo.py --cleanup
-
-# Runtime のエージェント削除
-agentcore destroy
-python3.12 agentcore_runtime_deploy.py --cleanup
-
-# Lambda 関数の削除
-aws cloudformation delete-stack --stack-name agentcore-travel-tools --region us-east-1
+cd ~/handson
+./cleanup_all.sh
 ```
+
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

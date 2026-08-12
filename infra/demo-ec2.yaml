@@ -124,6 +124,9 @@ Resources:
         - arn:aws:iam::aws:policy/IAMFullAccess
         - arn:aws:iam::aws:policy/AWSStepFunctionsFullAccess
         - arn:aws:iam::aws:policy/AWSGlueConsoleFullAccess
+        - arn:aws:iam::aws:policy/AmazonSNSFullAccess
+        - arn:aws:iam::aws:policy/AmazonEC2FullAccess
+        - arn:aws:iam::aws:policy/AmazonEventBridgeFullAccess
       Policies:
         - PolicyName: BedrockAgentAndOpenSearch
           PolicyDocument:
@@ -241,14 +244,15 @@ Resources:
 
           # S3 からハンズオン資材をダウンロード
           echo "[5/6] S3 から資材ダウンロード..."
-          WORK_DIR=/home/ec2-user/handson
+          WORK_DIR=/home/ssm-user/handson
+          mkdir -p /home/ssm-user
           mkdir -p $WORK_DIR
           aws s3 cp s3://${AssetsBucket}/${AssetsPrefix}/handson.tar.gz /tmp/handson.tar.gz
           tar -xzf /tmp/handson.tar.gz -C $WORK_DIR --strip-components=1
           rm -f /tmp/handson.tar.gz
-          chown -R ec2-user:ec2-user $WORK_DIR
+          chown -R ssm-user:ssm-user /home/ssm-user
 
-          # M03用 S3 バケットとサンプルドキュメント
+          # デモ用リソース準備
           echo "[6/6] デモ用リソース準備..."
           AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
           TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
@@ -267,13 +271,8 @@ Resources:
             aws s3 sync "$WORK_DIR/M03-rag-knowledgebase/sample-docs/" "s3://$KB_BUCKET/documents/" --quiet
           fi
 
-          # デモ実行ヘルパー (S3 から取得済みのものをホームにコピー)
-          cp $WORK_DIR/run-demo.sh /home/ec2-user/run-demo.sh
-          chmod +x /home/ec2-user/run-demo.sh
-          chown ec2-user:ec2-user /home/ec2-user/run-demo.sh
-
           # リージョン設定
-          sudo -u ec2-user aws configure set region $AWS_REGION
+          sudo -u ssm-user aws configure set region $AWS_REGION
 
           # Bedrock モデル確認
           echo ""

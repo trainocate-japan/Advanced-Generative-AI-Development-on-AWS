@@ -129,8 +129,11 @@ python3.12 batch_optimization.py
 ## クリーンアップ
 
 ```bash
-# ローカル実行のためクリーンアップ最小限
+cd ~/handson
+./cleanup_all.sh
 ```
+
+全モジュール（M01-M10）のリソースを一括削除します。存在しないリソースは自動スキップされます。
 
 ---
 

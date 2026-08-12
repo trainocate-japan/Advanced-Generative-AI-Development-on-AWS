@@ -1,0 +1,311 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  M10 Enterprise Integration Pattern - API Gateway + Lambda + Bedrock
+  REST API による AI サービス公開パターンのサンプルスタック
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: デプロイ環境
+  ModelId:
+    Type: String
+    Default: amazon.nova-lite-v1:0
+    Description: 使用する Bedrock モデル ID
+
+Mappings:
+  EnvConfig:
+    dev:
+      ThrottleRateLimit: 10
+      ThrottleBurstLimit: 5
+    staging:
+      ThrottleRateLimit: 50
+      ThrottleBurstLimit: 25
+    prod:
+      ThrottleRateLimit: 200
+      ThrottleBurstLimit: 100
+
+Resources:
+  # =============================================================
+  # Lambda 実行ロール（Bedrock InvokeModel 権限付き）
+  # =============================================================
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-lambda-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BedrockInvokePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource:
+                  - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/${ModelId}"
+
+  # =============================================================
+  # Lambda 関数（Bedrock 呼び出しビジネスロジック）
+  # =============================================================
+  BedrockInvokeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-invoke-bedrock"
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 30
+      MemorySize: 256
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          MODEL_ID: !Ref ModelId
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+
+          bedrock = boto3.client("bedrock-runtime")
+          MODEL_ID = os.environ["MODEL_ID"]
+
+          def handler(event, context):
+              """API Gateway プロキシ統合ハンドラー"""
+              try:
+                  body = json.loads(event.get("body", "{}"))
+                  user_message = body.get("message", "")
+
+                  if not user_message:
+                      return response(400, {"error": "message is required"})
+
+                  # Bedrock Converse API 呼び出し
+                  result = bedrock.converse(
+                      modelId=MODEL_ID,
+                      messages=[
+                          {"role": "user", "content": [{"text": user_message}]}
+                      ],
+                      inferenceConfig={"maxTokens": 1024, "temperature": 0.7},
+                  )
+
+                  assistant_text = result["output"]["message"]["content"][0]["text"]
+                  usage = result["usage"]
+
+                  return response(200, {
+                      "response": assistant_text,
+                      "usage": {
+                          "inputTokens": usage["inputTokens"],
+                          "outputTokens": usage["outputTokens"],
+                      },
+                      "model": MODEL_ID,
+                  })
+
+              except Exception as e:
+                  print(f"Error: {e}")
+                  return response(500, {"error": str(e)})
+
+          def response(status_code, body):
+              return {
+                  "statusCode": status_code,
+                  "headers": {
+                      "Content-Type": "application/json",
+                      "Access-Control-Allow-Origin": "*",
+                  },
+                  "body": json.dumps(body, ensure_ascii=False),
+              }
+
+  # =============================================================
+  # API Gateway REST API
+  # =============================================================
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "${AWS::StackName}-api"
+      Description: Enterprise AI Service API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # /invoke リソース
+  InvokeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: invoke
+
+  # POST メソッド
+  InvokeMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref InvokeResource
+      HttpMethod: POST
+      AuthorizationType: AWS_IAM
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BedrockInvokeFunction.Arn}/invocations"
+
+  # CORS 用 OPTIONS メソッド
+  InvokeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref InvokeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # Lambda 呼び出し権限
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BedrockInvokeFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/invoke"
+
+  # デプロイ
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - InvokeMethod
+      - InvokeOptionsMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+
+  # ステージ（スロットリング設定付き）
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref ApiGateway
+      DeploymentId: !Ref ApiDeployment
+      StageName: !Ref Environment
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingRateLimit: !FindInMap [EnvConfig, !Ref Environment, ThrottleRateLimit]
+          ThrottlingBurstLimit: !FindInMap [EnvConfig, !Ref Environment, ThrottleBurstLimit]
+          LoggingLevel: INFO
+          MetricsEnabled: true
+
+  # =============================================================
+  # EventBridge ルール（非同期統合パターン）
+  # =============================================================
+  AiProcessingEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-ai-processing"
+      Description: ERP イベントを受けて AI 処理をトリガー
+      EventPattern:
+        source:
+          - "enterprise.erp"
+        detail-type:
+          - "OrderCreated"
+          - "DocumentUpdated"
+          - "FeedbackReceived"
+      Targets:
+        - Id: InvokeBedrock
+          Arn: !GetAtt BedrockInvokeFunction.Arn
+
+  EventBridgeInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BedrockInvokeFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AiProcessingEventRule.Arn
+
+  # =============================================================
+  # CloudWatch ダッシュボード
+  # =============================================================
+  MonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${AWS::StackName}-monitoring"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "title": "API Gateway リクエスト数",
+                "metrics": [
+                  ["AWS/ApiGateway", "Count", "ApiName", "${AWS::StackName}-api", "Stage", "${Environment}"]
+                ],
+                "period": 60,
+                "stat": "Sum"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "Lambda 実行時間",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "${AWS::StackName}-invoke-bedrock"]
+                ],
+                "period": 60,
+                "stat": "Average"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "title": "API Gateway 4xx/5xx エラー",
+                "metrics": [
+                  ["AWS/ApiGateway", "4XXError", "ApiName", "${AWS::StackName}-api", "Stage", "${Environment}"],
+                  ["AWS/ApiGateway", "5XXError", "ApiName", "${AWS::StackName}-api", "Stage", "${Environment}"]
+                ],
+                "period": 60,
+                "stat": "Sum"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway エンドポイント URL
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/invoke"
+
+  LambdaFunctionArn:
+    Description: Lambda 関数 ARN
+    Value: !GetAtt BedrockInvokeFunction.Arn
+
+  EventRuleArn:
+    Description: EventBridge ルール ARN
+    Value: !GetAtt AiProcessingEventRule.Arn
+
+  ExampleCurlCommand:
+    Description: テスト用 curl コマンド（IAM 認証付き）
+    Value: !Sub |
+      aws apigateway test-invoke-method \
+        --rest-api-id ${ApiGateway} \
+        --resource-id ${InvokeResource} \
+        --http-method POST \
+        --body '{"message": "注文 #12345 を分析してください"}'
