@@ -106,6 +106,100 @@ M03 のナレッジベースに対して Retrieve API を実行し、Ground Trut
 
 ---
 
+### ステップ 2.1b: Re-ranking による検索品質の改善
+
+```bash
+python3.12 rag_reranking.py
+```
+
+ベクトル検索の結果を **Re-ranking モデル**（Cohere Rerank v3.5）で再スコアリングし、検索品質の改善を定量評価します。
+
+**Re-ranking とは:**
+
+```
+クエリ → [ベクトル検索: 高速に候補を広く取得] → 候補 10〜20 件
+                                                       ↓
+        [Re-ranking: Cross-Encoder で精密に再順位付け] → 上位 3〜5 件
+```
+
+- ベクトル検索（Bi-Encoder）: 高速だがクエリと文書の細かい関係を見落とすことがある
+- Re-ranking（Cross-Encoder）: クエリと各文書を直接比較し正確にスコアリング
+
+**ハンズオン内容（3パート構成）:**
+
+| パート | 内容 | 学習ポイント |
+|---|---|---|
+| 1 | Rerank API の直接呼び出し | API の使い方、レスポンス構造の理解 |
+| 2 | KB Retrieve API + rerankingConfiguration | Re-ranking 前後のメトリクス比較 |
+| 3 | パラメータチューニング | 候補数とレイテンシー・精度のトレードオフ |
+
+**パート 1: Rerank API の直接呼び出し**
+
+```python
+# Bedrock Rerank API の呼び出し例
+response = bedrock_agent_runtime.rerank(
+    queries=[{"type": "TEXT", "textQuery": {"text": "契約書の解除条件"}}],
+    sources=[
+        {"type": "INLINE", "inlineDocumentSource": {
+            "type": "TEXT",
+            "textDocument": {"text": "文書テキスト..."}
+        }}
+    ],
+    rerankingConfiguration={
+        "type": "BEDROCK_RERANKING_MODEL",
+        "bedrockRerankingConfiguration": {
+            "modelConfiguration": {
+                "modelArn": "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0"
+            },
+            "numberOfResults": 5
+        }
+    }
+)
+```
+
+**パート 2: Knowledge Base Retrieve API に Re-ranking を統合**
+
+```python
+# vectorSearchConfiguration 内に rerankingConfiguration を追加
+response = bedrock_agent_runtime.retrieve(
+    knowledgeBaseId=kb_id,
+    retrievalQuery={"text": query},
+    retrievalConfiguration={
+        "vectorSearchConfiguration": {
+            "numberOfResults": 10,  # 初期候補数（広めに取得）
+            "rerankingConfiguration": {
+                "type": "BEDROCK_RERANKING_MODEL",
+                "bedrockRerankingConfiguration": {
+                    "modelConfiguration": {
+                        "modelArn": "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0"
+                    },
+                    "numberOfRerankedResults": 5  # Re-ranking 後の最終結果数
+                }
+            }
+        }
+    }
+)
+```
+
+**パート 3: パラメータチューニングの指針**
+
+| 初期候補数 | 適用シーン | トレードオフ |
+|---|---|---|
+| 5 | リアルタイム応答必須 | レイテンシー最小 / 効果限定的 |
+| 10 | 一般的な RAG（推奨） | バランス型 |
+| 20 | 正確性最重要（法律・医療） | 精度最大 / コスト・レイテンシー増加 |
+
+**確認ポイント:**
+- Re-ranking 前後での MRR, NDCG の改善幅を確認
+- レイテンシー増加がユースケースの許容範囲内か
+- 候補数 > 20 で精度改善が飽和する傾向を確認
+- Cohere Rerank v3.5 モデルのアクセスが有効化されているか（Bedrock コンソール）
+
+> **前提条件**: Bedrock コンソールで `Cohere Rerank v3.5` モデルアクセスを有効化しておくこと。
+> 未有効化の場合でもモックモードで動作を確認できます。
+
+---
+
 ### ステップ 2.2: コンテキスト照合検証
 
 ```bash
