@@ -23,7 +23,16 @@ REGION = 'us-east-1'
 # アカウント情報
 caller_identity = sts.get_caller_identity()
 ACCOUNT_ID = caller_identity['Account']
-PRINCIPAL_ARN = caller_identity['Arn']
+# assumed-role セッション ARN ではなく IAM ロール ARN を使用
+# （セッション ID が変わっても権限が維持されるようにするため）
+_arn = caller_identity['Arn']
+if ':assumed-role/' in _arn:
+    # arn:aws:sts::ACCOUNT:assumed-role/ROLE_NAME/SESSION_ID
+    #  → arn:aws:iam::ACCOUNT:role/ROLE_NAME
+    role_name = _arn.split(':assumed-role/')[1].split('/')[0]
+    PRINCIPAL_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/{role_name}"
+else:
+    PRINCIPAL_ARN = _arn
 
 
 def create_encryption_policy():
