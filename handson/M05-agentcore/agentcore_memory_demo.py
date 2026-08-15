@@ -9,10 +9,10 @@
   AWS 認証情報が設定済み（us-east-1）
 
 実行:
-  python3.12 agentcore_memory_demo.py
+  python agentcore_memory_demo.py
 
 クリーンアップ:
-  python3.12 agentcore_memory_demo.py --cleanup
+  python agentcore_memory_demo.py --cleanup
 """
 
 import boto3
@@ -329,7 +329,7 @@ def main():
   • Memory: {MEMORY_NAME} ({memory_id})
 
   クリーンアップ:
-    python3.12 agentcore_memory_demo.py --cleanup
+    python agentcore_memory_demo.py --cleanup
 """)
 
 

@@ -23,7 +23,7 @@ pip install crewai crewai-tools
 ### ステップ 1.1: Strands Agents によるエージェント構築
 
 ```bash
-python3.12 travel_agent.py
+python travel_agent.py
 ```
 
 エージェントの基本コンポーネント：
@@ -75,7 +75,7 @@ aws cloudformation deploy \
 
 Gateway デモの実行：
 ```bash
-python3.12 agentcore_gateway_demo.py
+python agentcore_gateway_demo.py
 ```
 
 実行内容：
@@ -90,13 +90,13 @@ Gateway の機能：
 
 クリーンアップ：
 ```bash
-python3.12 agentcore_gateway_demo.py --cleanup
+python agentcore_gateway_demo.py --cleanup
 ```
 
 ### ステップ 2.2: AgentCore Memory - コンテキスト保持
 
 ```bash
-python3.12 agentcore_memory_demo.py
+python agentcore_memory_demo.py
 ```
 
 実行内容：
@@ -118,13 +118,13 @@ Memory の戦略：
 
 クリーンアップ：
 ```bash
-python3.12 agentcore_memory_demo.py --cleanup
+python agentcore_memory_demo.py --cleanup
 ```
 
 ### ステップ 2.3: AgentCore Identity - セキュアなアクセス
 
 ```bash
-python3.12 agentcore_identity_demo.py
+python agentcore_identity_demo.py
 ```
 
 実行内容：
@@ -139,14 +139,14 @@ Identity の機能：
 
 クリーンアップ：
 ```bash
-python3.12 agentcore_identity_demo.py --cleanup
+python agentcore_identity_demo.py --cleanup
 ```
 
 ### ステップ 2.4: AgentCore Runtime - サーバーレスデプロイ
 
 エージェントコードの生成（Gateway / Memory の URL を埋め込み）：
 ```bash
-python3.12 agentcore_runtime_deploy.py
+python agentcore_runtime_deploy.py
 ```
 
 生成されたファイルを使って CLI でデプロイ：
@@ -221,7 +221,7 @@ agentcore invoke '{"prompt": "東京から沖縄の2泊3日旅行プランを作
 クリーンアップ：
 ```bash
 agentcore destroy
-python3.12 agentcore_runtime_deploy.py --cleanup
+python agentcore_runtime_deploy.py --cleanup
 ```
 
 ---
@@ -231,7 +231,7 @@ python3.12 agentcore_runtime_deploy.py --cleanup
 ### ステップ 3.1: Strands Agents の実行
 
 ```bash
-python3.12 framework_strands.py
+python framework_strands.py
 ```
 
 特徴:
@@ -244,7 +244,7 @@ python3.12 framework_strands.py
 ### ステップ 3.2: LangGraph の実行
 
 ```bash
-python3.12 framework_langgraph.py
+python framework_langgraph.py
 ```
 
 特徴:
@@ -257,7 +257,7 @@ python3.12 framework_langgraph.py
 ### ステップ 3.3: CrewAI の実行
 
 ```bash
-python3.12 framework_crewai.py
+python framework_crewai.py
 ```
 
 特徴:

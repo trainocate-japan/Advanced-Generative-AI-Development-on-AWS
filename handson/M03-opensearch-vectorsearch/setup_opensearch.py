@@ -253,8 +253,8 @@ def main():
     print(" ✅ セットアップ完了!")
     print("=" * 60)
     print("\n  次のステップ:")
-    print("    python3.12 vector_search.py --setup")
-    print("    python3.12 vector_search.py --search \"契約の解除条件\"")
+    print("    python vector_search.py --setup")
+    print("    python vector_search.py --search \"契約の解除条件\"")
     print()
 
 

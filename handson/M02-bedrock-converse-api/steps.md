@@ -14,7 +14,7 @@ pip install boto3
 `data_validation.py` を実行して、データ検証パイプラインの動作を確認します：
 
 ```bash
-python3.12 data_validation.py
+python data_validation.py
 ```
 
 このスクリプトは以下の検証を実行します：
@@ -46,7 +46,7 @@ python3.12 data_validation.py
 `multimodal_processing.py` を実行します：
 
 ```bash
-python3.12 multimodal_processing.py
+python multimodal_processing.py
 ```
 
 このスクリプトは以下を実行します：
@@ -79,7 +79,7 @@ python3.12 multimodal_processing.py
 `context_optimization.py` を実行します：
 
 ```bash
-python3.12 context_optimization.py
+python context_optimization.py
 ```
 
 以下の最適化技術を実践します：
@@ -110,7 +110,7 @@ python3.12 context_optimization.py
 `prompt_caching_demo.py` を実行して、プロンプトキャッシュの効果を確認します：
 
 ```bash
-python3.12 prompt_caching_demo.py
+python prompt_caching_demo.py
 ```
 
 このスクリプトは以下を実行します：
@@ -131,7 +131,7 @@ python3.12 prompt_caching_demo.py
 ### ステップ 4.1: エンドツーエンドパイプラインの実行
 
 ```bash
-python3.12 pipeline_demo.py
+python pipeline_demo.py
 ```
 
 パイプライン全体を通して以下を測定します：
@@ -260,7 +260,7 @@ aws cloudformation wait stack-create-complete --stack-name stepfunctions-pipelin
 デモスクリプトを実行します：
 
 ```bash
-python3.12 stepfunctions_demo.py
+python stepfunctions_demo.py
 ```
 
 または、AWS CLI で直接実行：
@@ -366,7 +366,7 @@ Rules = [
 デモスクリプトを実行します（評価ジョブの起動に 2〜5 分かかります）：
 
 ```bash
-python3.12 glue_data_quality_demo.py
+python glue_data_quality_demo.py
 ```
 
 スクリプトは以下を実行します：

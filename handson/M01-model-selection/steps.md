@@ -12,7 +12,7 @@ cd ~/handson/M01-model-selection
 ### ステップ 1.2: モデルベンチマーク比較の実行
 
 ```bash
-python3.12 benchmark.py
+python benchmark.py
 ```
 
 このスクリプトは以下を測定します：
@@ -71,7 +71,7 @@ aws cloudformation describe-stacks --stack-name m01 \
 100件のクエリ（simple=40, medium=30, complex=30）を一括送信して動的ルーティングの動作を確認します：
 
 ```bash
-python3.12 load_test.py <API_URL>
+python load_test.py <API_URL>
 ```
 
 出力される結果：
@@ -88,7 +88,7 @@ python3.12 load_test.py <API_URL>
 
 ```bash
 API_URL=<デプロイ時に取得したURL>
-curl -s $API_URL/health | python3.12 -m json.tool
+curl -s $API_URL/health | python -m json.tool
 ```
 
 レスポンス例：
@@ -106,12 +106,12 @@ curl -s $API_URL/health | python3.12 -m json.tool
 # simple → Nova Lite にルーティングされることを確認
 curl -s -X POST $API_URL/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "S3とは？", "complexity": "simple"}' | python3.12 -m json.tool
+  -d '{"query": "S3とは？", "complexity": "simple"}' | python -m json.tool
 
 # complex → Claude Sonnet にルーティングされることを確認
 curl -s -X POST $API_URL/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "マルチリージョンDR設計をRTO5分RPO1分で提案してください", "complexity": "complex"}' | python3.12 -m json.tool
+  -d '{"query": "マルチリージョンDR設計をRTO5分RPO1分で提案してください", "complexity": "complex"}' | python -m json.tool
 ```
 
 ### ステップ 3.3: 障害シミュレーション（プロバイダー障害を発生させる）
@@ -120,7 +120,7 @@ curl -s -X POST $API_URL/query \
 # Anthropic (Claude) に timeout 障害をシミュレート
 curl -s -X POST $API_URL/admin/simulate-failure \
   -H "Content-Type: application/json" \
-  -d '{"provider": "anthropic", "failure_type": "timeout"}' | python3.12 -m json.tool
+  -d '{"provider": "anthropic", "failure_type": "timeout"}' | python -m json.tool
 ```
 
 ### ステップ 3.4: フォールバック動作の確認
@@ -131,7 +131,7 @@ curl -s -X POST $API_URL/admin/simulate-failure \
 # 通常なら Claude に行くクエリだが、Nova Pro にフォールバックする
 curl -s -X POST $API_URL/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "金融規制コンプライアンスのリスク評価を行ってください", "complexity": "complex"}' | python3.12 -m json.tool
+  -d '{"query": "金融規制コンプライアンスのリスク評価を行ってください", "complexity": "complex"}' | python -m json.tool
 ```
 
 レスポンスで以下を確認：
@@ -142,7 +142,7 @@ curl -s -X POST $API_URL/query \
 ### ステップ 3.5: サーキットブレーカー状態の確認
 
 ```bash
-curl -s $API_URL/health | python3.12 -m json.tool
+curl -s $API_URL/health | python -m json.tool
 ```
 
 `circuit_breakers` フィールドに `"OPEN"` 状態が表示されることを確認。
@@ -153,13 +153,13 @@ curl -s $API_URL/health | python3.12 -m json.tool
 # 障害を解除
 curl -s -X POST $API_URL/admin/simulate-failure \
   -H "Content-Type: application/json" \
-  -d '{"provider": "anthropic", "failure_type": "none"}' | python3.12 -m json.tool
+  -d '{"provider": "anthropic", "failure_type": "none"}' | python -m json.tool
 
 # 30秒後（CB タイムアウト後）に complex クエリを送信 → Claude に復帰
 sleep 35
 curl -s -X POST $API_URL/query \
   -H "Content-Type: application/json" \
-  -d '{"query": "マイクロサービスのCI/CD設計を提案してください", "complexity": "complex"}' | python3.12 -m json.tool
+  -d '{"query": "マイクロサービスのCI/CD設計を提案してください", "complexity": "complex"}' | python -m json.tool
 ```
 
 `"fallback_used": false` で元のモデルに復帰したことを確認。

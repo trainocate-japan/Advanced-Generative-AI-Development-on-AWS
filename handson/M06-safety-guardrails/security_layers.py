@@ -13,10 +13,10 @@
   setup_guardrails.py を先に実行済み
 
 実行:
-  python3.12 security_layers.py
+  python security_layers.py
 
 クリーンアップ:
-  python3.12 cleanup_guardrails.py
+  python cleanup_guardrails.py
 """
 
 import boto3

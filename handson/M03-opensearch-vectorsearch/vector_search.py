@@ -410,9 +410,9 @@ def setup(client):
     print(" ✅ セットアップ完了!")
     print("=" * 60)
     print("\n  検索を試す:")
-    print('    python3.12 vector_search.py --search "契約の解除条件"')
-    print('    python3.12 vector_search.py --search "残業代の計算方法"')
-    print('    python3.12 vector_search.py --search "個人情報の第三者提供"')
+    print('    python vector_search.py --search "契約の解除条件"')
+    print('    python vector_search.py --search "残業代の計算方法"')
+    print('    python vector_search.py --search "個人情報の第三者提供"')
     print()
 
 

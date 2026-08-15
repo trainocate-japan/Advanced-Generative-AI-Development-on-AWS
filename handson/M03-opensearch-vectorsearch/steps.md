@@ -14,7 +14,7 @@ pip install opensearch-py requests-aws4auth boto3
 ### ステップ 1.2: OpenSearch Serverless コレクションの作成
 
 ```bash
-python3.12 setup_opensearch.py
+python setup_opensearch.py
 ```
 
 スクリプトは以下を実行します：
@@ -46,7 +46,7 @@ aws opensearchserverless list-collections
 ### ステップ 2.1: インデックスの作成とドキュメント投入
 
 ```bash
-python3.12 vector_search.py --setup
+python vector_search.py --setup
 ```
 
 このステップでは以下を実行します：
@@ -76,7 +76,7 @@ python3.12 vector_search.py --setup
 ### ステップ 2.2: k-NN ベクトル検索の実行
 
 ```bash
-python3.12 vector_search.py --search "契約の解除条件と損害賠償"
+python vector_search.py --search "契約の解除条件と損害賠償"
 ```
 
 以下のクエリで動作を確認します：
@@ -92,7 +92,7 @@ python3.12 vector_search.py --search "契約の解除条件と損害賠償"
 ### ステップ 2.3: k-NN アルゴリズムの比較
 
 ```bash
-python3.12 vector_search.py --compare-algorithms
+python vector_search.py --compare-algorithms
 ```
 
 | パラメータ | HNSW (nmslib) | HNSW (faiss) | IVF (faiss) |
@@ -109,7 +109,7 @@ python3.12 vector_search.py --compare-algorithms
 ### ステップ 3.1: ハイブリッド検索の実行
 
 ```bash
-python3.12 hybrid_search.py --query "個人情報 第三者提供 同意"
+python hybrid_search.py --query "個人情報 第三者提供 同意"
 ```
 
 3 つの検索タイプを同時に実行し、結果を比較します：
@@ -123,7 +123,7 @@ python3.12 hybrid_search.py --query "個人情報 第三者提供 同意"
 ### ステップ 3.2: スコア正規化と重み付け
 
 ```bash
-python3.12 hybrid_search.py --query "秘密保持義務の期間と範囲" --semantic-weight 0.7
+python hybrid_search.py --query "秘密保持義務の期間と範囲" --semantic-weight 0.7
 ```
 
 ハイブリッド検索のスコア統合方法：
@@ -140,7 +140,7 @@ final_score = (semantic_weight × normalized_knn_score) + ((1 - semantic_weight)
 ### ステップ 3.3: クエリタイプ別の最適な検索戦略
 
 ```bash
-python3.12 hybrid_search.py --demo
+python hybrid_search.py --demo
 ```
 
 以下のクエリタイプで結果を比較：
@@ -162,7 +162,7 @@ python3.12 hybrid_search.py --demo
 ### ステップ 4.1: script_score によるカスタムスコアリング
 
 ```bash
-python3.12 custom_scoring.py --query "契約解除" --boost-recent
+python custom_scoring.py --query "契約解除" --boost-recent
 ```
 
 カスタムスコアリングのユースケース：
@@ -174,7 +174,7 @@ python3.12 custom_scoring.py --query "契約解除" --boost-recent
 ### ステップ 4.2: スコアリング関数の比較
 
 ```bash
-python3.12 custom_scoring.py --compare
+python custom_scoring.py --compare
 ```
 
 実装するスコアリング関数：
@@ -196,7 +196,7 @@ score = (knn_score * 0.6) + (bm25_score * 0.2) + (recency_score * 0.1) + (popula
 ### ステップ 4.3: フィルタリングとの組み合わせ
 
 ```bash
-python3.12 custom_scoring.py --query "知的財産権" --filter-category "contract"
+python custom_scoring.py --query "知的財産権" --filter-category "contract"
 ```
 
 メタデータフィルタリング + カスタムスコアリングの組み合わせ：

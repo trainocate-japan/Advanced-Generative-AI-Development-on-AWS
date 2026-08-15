@@ -282,16 +282,20 @@ Resources:
           dnf update -y
           dnf install -y python3.12 python3.12-pip jq unzip tar nodejs npm git
 
+          # python / pip コマンドで python3.12 を使えるようにする
+          alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+          alternatives --install /usr/bin/pip pip /usr/bin/pip3.12 1
+
           # Python 設定
           echo "[2/6] Python ライブラリ..."
-          pip3.12 install --upgrade pip
-          pip3.12 install boto3 streamlit numpy pandas opensearch-py requests-aws4auth
-          pip3.12 install strands-agents strands-agents-tools
-          pip3.12 install bedrock-agentcore bedrock-agentcore-starter-toolkit
+          pip install --upgrade pip
+          pip install boto3 streamlit numpy pandas opensearch-py requests-aws4auth
+          pip install strands-agents strands-agents-tools
+          pip install bedrock-agentcore bedrock-agentcore-starter-toolkit
 
           # AWS SAM CLI
           echo "[3/6] SAM CLI..."
-          pip3.12 install aws-sam-cli
+          pip install aws-sam-cli
 
           # AWS CDK
           echo "[4/6] CDK..."

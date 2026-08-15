@@ -406,8 +406,8 @@ def main():
     print(f"  ベクトルストア: S3 Vectors ({VECTOR_BUCKET_NAME}/{VECTOR_INDEX_NAME})")
     print(f"\n  次のステップ:")
     print(f"    1. rag_basic.py の KNOWLEDGE_BASE_ID を '{kb_id}' に設定")
-    print(f"    2. python3.12 rag_basic.py を実行")
-    print(f"    3. python3.12 rag_retrieve.py で検索結果の詳細を確認")
+    print(f"    2. python rag_basic.py を実行")
+    print(f"    3. python rag_retrieve.py で検索結果の詳細を確認")
 
     # 設定ファイルに KB ID を保存
     config = {

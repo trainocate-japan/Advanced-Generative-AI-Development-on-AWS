@@ -13,10 +13,10 @@
   setup_guardrails.py を先に実行済み
 
 実行:
-  python3.12 guardrails_demo.py
+  python guardrails_demo.py
 
 クリーンアップ:
-  python3.12 cleanup_guardrails.py
+  python cleanup_guardrails.py
 """
 
 import boto3
@@ -362,7 +362,7 @@ def main():
   • Converse API の guardrailConfig で簡単に統合
 
   次のステップ:
-    python3.12 security_layers.py
+    python security_layers.py
 """)
 
 

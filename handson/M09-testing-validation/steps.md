@@ -6,7 +6,7 @@
 
 ```bash
 cd ~/handson/M09-testing-validation
-python3.12 evaluation_framework.py
+python evaluation_framework.py
 ```
 
 AI 品質の4つの評価軸：
@@ -84,7 +84,7 @@ JSON形式で評価を返してください。
 
 ```bash
 cd ~/handson/M09-testing-validation
-python3.12 rag_retrieval_metrics.py
+python rag_retrieval_metrics.py
 ```
 
 M03 のナレッジベースに対して Retrieve API を実行し、Ground Truth データセットと照合して検索品質を測定します。
@@ -109,7 +109,7 @@ M03 のナレッジベースに対して Retrieve API を実行し、Ground Trut
 ### ステップ 2.1b: Re-ranking による検索品質の改善
 
 ```bash
-python3.12 rag_reranking.py
+python rag_reranking.py
 ```
 
 ベクトル検索の結果を **Re-ranking モデル**（Cohere Rerank v3.5）で再スコアリングし、検索品質の改善を定量評価します。
@@ -203,7 +203,7 @@ response = bedrock_agent_runtime.retrieve(
 ### ステップ 2.2: コンテキスト照合検証
 
 ```bash
-python3.12 rag_context_validation.py
+python rag_context_validation.py
 ```
 
 検索されたコンテキストが本当にクエリの意図に合っているかを **5つの軸** で検証します。
@@ -226,7 +226,7 @@ python3.12 rag_context_validation.py
 ### ステップ 2.3: 生成評価 - LLM-as-Judge とバイアス検知
 
 ```bash
-python3.12 rag_generation_evaluation.py
+python rag_generation_evaluation.py
 ```
 
 **Part 1: LLM-as-Judge による多次元評価**
@@ -266,7 +266,7 @@ RAG の生成コンポーネントを5つのディメンションで評価：
 ### ステップ 2.4: エンドツーエンド RAG 評価
 
 ```bash
-python3.12 rag_e2e_evaluation.py
+python rag_e2e_evaluation.py
 ```
 
 **テストピラミッドに基づく包括的な検証:**
@@ -316,7 +316,7 @@ python3.12 rag_e2e_evaluation.py
 ### ステップ 3.1: プロンプト A/B テスト
 
 ```bash
-python3.12 ab_testing.py
+python ab_testing.py
 ```
 
 テスト設計：
@@ -351,7 +351,7 @@ python3.12 ab_testing.py
 ### ステップ 4.1: ベンチマーク評価の実行
 
 ```bash
-python3.12 benchmark_comparison.py
+python benchmark_comparison.py
 ```
 
 自分のモデルを業界標準ベンチマークと比較：
@@ -461,7 +461,7 @@ EXEC_ARN=$(aws stepfunctions list-executions \
 aws stepfunctions describe-execution \
   --execution-arn $EXEC_ARN \
   --query "output" \
-  --output text | python3.12 -m json.tool
+  --output text | python -m json.tool
 ```
 
 ### ステップ 5.5: ローカルでのパイプラインシミュレーション
@@ -469,7 +469,7 @@ aws stepfunctions describe-execution \
 CFnデプロイなしでパイプラインの動作を確認したい場合：
 
 ```bash
-python3.12 automated_evaluation_pipeline.py
+python automated_evaluation_pipeline.py
 ```
 
 ### ステップ 5.6: CloudWatch モニタリングとアラート
@@ -488,7 +488,7 @@ python3.12 automated_evaluation_pipeline.py
 ### ステップ 6.1: BLEU スコア
 
 ```bash
-python3.12 bleu_rouge_evaluation.py
+python bleu_rouge_evaluation.py
 ```
 
 BLEU（Bilingual Evaluation Understudy）:

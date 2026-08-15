@@ -7,7 +7,7 @@
 対応モデル: Amazon Nova Micro, Nova Lite, Nova Pro
 
 使い方:
-  python3.12 prompt_caching_demo.py
+  python prompt_caching_demo.py
 """
 
 import boto3

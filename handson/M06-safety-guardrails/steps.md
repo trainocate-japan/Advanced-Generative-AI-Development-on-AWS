@@ -6,7 +6,7 @@
 
 ```bash
 cd ~/handson/M06-safety-guardrails
-python3.12 setup_guardrails.py
+python setup_guardrails.py
 ```
 
 > **注意**: 日本語対応にはコンテンツフィルターティアを **Standard** に設定する必要があります。
@@ -23,7 +23,7 @@ Guardrails に設定する保護機能：
 ### ステップ 1.2: Guardrails の動作確認
 
 ```bash
-python3.12 guardrails_demo.py
+python guardrails_demo.py
 ```
 
 テストケース：
@@ -46,7 +46,7 @@ python3.12 guardrails_demo.py
 ### ステップ 2.2: 多層防御の実装
 
 ```bash
-python3.12 security_layers.py
+python security_layers.py
 ```
 
 防御レイヤー：

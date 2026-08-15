@@ -3,10 +3,10 @@
 さまざまな複雑度のクエリ100件を一括送信し、ルーティング結果を確認する
 
 使い方:
-  python3.12 load_test.py <API_URL>
+  python load_test.py <API_URL>
 
 例:
-  python3.12 load_test.py https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/prod
+  python load_test.py https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/prod
 """
 
 import json
@@ -271,8 +271,8 @@ def run_load_test(api_url, concurrency=5):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("使い方: python3.12 load_test.py <API_URL>")
-        print("例:     python3.12 load_test.py https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/prod")
+        print("使い方: python load_test.py <API_URL>")
+        print("例:     python load_test.py https://xxxxxxxx.execute-api.us-east-1.amazonaws.com/prod")
         sys.exit(1)
 
     api_url = sys.argv[1].rstrip("/")

@@ -37,7 +37,7 @@ aws s3 cp sample-docs/ s3://legal-kb-demo-$(aws sts get-caller-identity --query 
 スクリプトを実行して、S3 Vectors ベースのナレッジベースを作成します：
 
 ```bash
-python3.12 setup_knowledgebase.py
+python setup_knowledgebase.py
 ```
 
 スクリプトは以下を順番に実行します：
@@ -72,7 +72,7 @@ aws s3vectors get-index --vector-bucket-name legal-vectors-demo --index-name leg
 ### ステップ 2.1: 基本的な RetrieveAndGenerate
 
 ```bash
-python3.12 rag_basic.py
+python rag_basic.py
 ```
 
 以下のクエリで動作を確認します：
@@ -88,7 +88,7 @@ python3.12 rag_basic.py
 ### ステップ 2.2: Retrieve API による検索結果の詳細確認
 
 ```bash
-python3.12 rag_retrieve.py
+python rag_retrieve.py
 ```
 
 Retrieve API で返される情報を詳細に確認します：
@@ -132,7 +132,7 @@ Retrieve API で返される情報を詳細に確認します：
 ```bash
 # ハイブリッド検索の実践は OpenSearch ハンズオンで実施
 cd ~/handson/M03-opensearch-vectorsearch
-python3.12 hybrid_search.py --demo
+python hybrid_search.py --demo
 ```
 
 ---
@@ -142,7 +142,7 @@ python3.12 hybrid_search.py --demo
 ### ステップ 3.1: マルチターン会話の実装
 
 ```bash
-python3.12 knowledge_assistant.py
+python knowledge_assistant.py
 ```
 
 **デモ 1: マルチターン会話**
@@ -189,7 +189,7 @@ ACCESS_MATRIX = {
 ### ステップ 3.4: 対話モードの実行（オプション）
 
 ```bash
-python3.12 knowledge_assistant.py --interactive
+python knowledge_assistant.py --interactive
 ```
 
 実際に質問を入力して、アシスタントと対話できます。
@@ -229,7 +229,7 @@ RAGAS（RAG Assessment）は、RAG システムの品質を4つの指標で定�
 ### ステップ 4.2: 評価の実行
 
 ```bash
-python3.12 rag_evaluation.py
+python rag_evaluation.py
 ```
 
 **評価パイプラインの処理フロー：**
@@ -371,7 +371,7 @@ aws s3 cp rag-eval-dataset.jsonl s3://legal-kb-demo-${ACCOUNT_ID}/evaluation/rag
 ### ステップ 5.1: チャンキング戦略の比較
 
 ```bash
-python3.12 chunking_optimization.py
+python chunking_optimization.py
 ```
 
 **Bedrock ナレッジベースで利用可能な 5 つのチャンキング戦略：**

@@ -6,7 +6,7 @@
 
 ```bash
 cd ~/handson/M04-prompt-engineering
-python3.12 prompt_personas.py
+python prompt_personas.py
 ```
 
 3つの部署向けペルソナを実装し、同一質問に対する応答の違いを確認します：
@@ -31,7 +31,7 @@ python3.12 prompt_personas.py
 ### ステップ 2.1: 基本的な CoT の実装
 
 ```bash
-python3.12 chain_of_thought.py
+python chain_of_thought.py
 ```
 
 以下のパターンを実装します：
@@ -75,7 +75,7 @@ python3.12 chain_of_thought.py
 ### ステップ 3.1: ワークフロー全体の実行
 
 ```bash
-python3.12 prompt_flow_demo.py
+python prompt_flow_demo.py
 ```
 
 エンタープライズグレードの AI カスタマーサポートワークフローを構築します。
@@ -124,7 +124,7 @@ python3.12 prompt_flow_demo.py
 ### ステップ 4.1: バイアス検出スクリプトの実行
 
 ```bash
-python3.12 bias_detection.py
+python bias_detection.py
 ```
 
 スライド「バイアスの検出と緩和戦略」のフローを実装します：
@@ -165,7 +165,7 @@ python3.12 bias_detection.py
 ### ステップ 5.1: プロンプト管理スクリプトの実行
 
 ```bash
-python3.12 prompt_management.py
+python prompt_management.py
 ```
 
 このスクリプトは以下を自動実行します：

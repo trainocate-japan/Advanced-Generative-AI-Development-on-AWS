@@ -491,9 +491,9 @@ def setup(client):
     print(" ✅ セットアップ完了!")
     print("=" * 60)
     print("\n  次のステップ:")
-    print('    python3.12 custom_scoring.py --query "障害対応" --boost-recent')
-    print('    python3.12 custom_scoring.py --compare')
-    print('    python3.12 custom_scoring.py --query "API設計" --filter-category privacy')
+    print('    python custom_scoring.py --query "障害対応" --boost-recent')
+    print('    python custom_scoring.py --compare')
+    print('    python custom_scoring.py --query "API設計" --filter-category privacy')
     print()
 
 
@@ -532,11 +532,11 @@ def main():
     if not args.query:
         parser.print_help()
         print("\n  使用例:")
-        print('    python3.12 custom_scoring.py --setup')
-        print('    python3.12 custom_scoring.py --query "解雇規制" --boost-recent')
-        print('    python3.12 custom_scoring.py --query "秘密保持" --boost-category contract')
-        print('    python3.12 custom_scoring.py --query "個人情報" --filter-category privacy')
-        print('    python3.12 custom_scoring.py --compare')
+        print('    python custom_scoring.py --setup')
+        print('    python custom_scoring.py --query "解雇規制" --boost-recent')
+        print('    python custom_scoring.py --query "秘密保持" --boost-category contract')
+        print('    python custom_scoring.py --query "個人情報" --filter-category privacy')
+        print('    python custom_scoring.py --compare')
         return
 
     query = args.query

@@ -236,7 +236,7 @@ def demo_search_type_comparison():
   │  → ハイブリッド検索の実践:                                       │
   │    M03-opensearch-vectorsearch/ ハンズオンで体験できます         │
   │    cd ~/handson/M03-opensearch-vectorsearch                       │
-  │    python3.12 hybrid_search.py --demo                             │
+  │    python hybrid_search.py --demo                             │
   └──────────────────────────────────────────────────────────────────┘
     """)
 

@@ -6,7 +6,7 @@
 
 ```bash
 cd ~/handson/M08-monitoring
-python3.12 setup_monitoring.py
+python setup_monitoring.py
 ```
 
 設定内容：
@@ -17,7 +17,7 @@ python3.12 setup_monitoring.py
 ### ステップ 1.2: カスタムメトリクスの発行
 
 ```bash
-python3.12 monitoring_demo.py
+python monitoring_demo.py
 ```
 
 追跡するメトリクス：
@@ -41,7 +41,7 @@ CloudWatch 異常検知の設定：
 ### ステップ 2.1: ハルシネーション検出
 
 ```bash
-python3.12 hallucination_detection.py
+python hallucination_detection.py
 ```
 
 検出手法：
@@ -61,7 +61,7 @@ CloudWatch ダッシュボードに表示するメトリクス：
 ### ステップ 2.3: 回答パターン分析（長さと複雑さのモニタリング）
 
 ```bash
-python3.12 response_pattern_analysis.py
+python response_pattern_analysis.py
 ```
 
 パターンベースの検出手法：
@@ -96,7 +96,7 @@ python3.12 response_pattern_analysis.py
 ### ステップ 2.5: 推論経路分析と論理エラー検出
 
 ```bash
-python3.12 reasoning_analysis.py
+python reasoning_analysis.py
 ```
 
 AIロジックの透明性フロー（4段階）：
@@ -123,7 +123,7 @@ AIロジックの透明性フロー（4段階）：
 ### ステップ 3.1: ビジネスメトリクスの定義
 
 ```bash
-python3.12 business_metrics.py
+python business_metrics.py
 ```
 
 3つの柱：
@@ -164,7 +164,7 @@ Costs:
 ### ステップ 4.1: 知性フィルターの実行
 
 ```bash
-python3.12 intelligent_alert_filter.py
+python intelligent_alert_filter.py
 ```
 
 知性フィルターの判定ロジック：

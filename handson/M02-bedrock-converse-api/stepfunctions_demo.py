@@ -8,7 +8,7 @@
   CloudFormation スタック 'stepfunctions-pipeline-demo' がデプロイ済み
 
 使い方:
-  python3.12 stepfunctions_demo.py
+  python stepfunctions_demo.py
 """
 
 import boto3

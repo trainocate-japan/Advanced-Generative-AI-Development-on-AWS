@@ -13,10 +13,10 @@
   AWS 認証情報が設定済み（us-east-1）
 
 実行:
-  python3.12 setup_guardrails.py
+  python setup_guardrails.py
 
 クリーンアップ:
-  python3.12 cleanup_guardrails.py
+  python cleanup_guardrails.py
 """
 
 import boto3
@@ -331,10 +331,10 @@ def main():
                           SSN・クレジットカード → ブロック
 
   次のステップ:
-    python3.12 guardrails_demo.py
+    python guardrails_demo.py
 
   クリーンアップ:
-    python3.12 cleanup_guardrails.py
+    python cleanup_guardrails.py
 """)
 
 

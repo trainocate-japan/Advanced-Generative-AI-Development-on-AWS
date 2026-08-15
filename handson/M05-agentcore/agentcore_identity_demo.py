@@ -9,10 +9,10 @@
   AWS 認証情報が設定済み（us-east-1）
 
 実行:
-  python3.12 agentcore_identity_demo.py
+  python agentcore_identity_demo.py
 
 クリーンアップ:
-  python3.12 agentcore_identity_demo.py --cleanup
+  python agentcore_identity_demo.py --cleanup
 """
 
 import boto3
@@ -182,7 +182,7 @@ def main():
   • 監査ログ（全アクションの追跡）
 
   クリーンアップ:
-    python3.12 agentcore_identity_demo.py --cleanup
+    python agentcore_identity_demo.py --cleanup
 """)
 
 

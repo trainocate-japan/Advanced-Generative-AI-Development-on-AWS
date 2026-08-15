@@ -17,10 +17,10 @@
       --region us-east-1
 
 実行:
-  python3.12 agentcore_gateway_demo.py
+  python agentcore_gateway_demo.py
 
 クリーンアップ:
-  python3.12 agentcore_gateway_demo.py --cleanup
+  python agentcore_gateway_demo.py --cleanup
   aws cloudformation delete-stack --stack-name agentcore-travel-tools --region us-east-1
 """
 
@@ -361,7 +361,7 @@ def main():
   • Gateway: {GATEWAY_NAME} ({gateway_id})
 
   クリーンアップ:
-    python3.12 agentcore_gateway_demo.py --cleanup
+    python agentcore_gateway_demo.py --cleanup
 """)
 
 

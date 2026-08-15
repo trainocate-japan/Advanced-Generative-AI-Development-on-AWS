@@ -10,7 +10,7 @@
   2. サンプル CSV が S3 にアップロード済み（スタック作成時に自動実行）
 
 使い方:
-  python3.12 glue_data_quality_demo.py
+  python glue_data_quality_demo.py
 """
 
 import boto3

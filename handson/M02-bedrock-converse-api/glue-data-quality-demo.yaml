@@ -347,7 +347,7 @@ Outputs:
     Description: Glue ジョブコンソール URL（Data Quality タブ確認用）
 
   RunDemoCommand:
-    Value: "python3.12 glue_data_quality_demo.py"
+    Value: "python glue_data_quality_demo.py"
     Description: デモスクリプト実行コマンド
 
   DeleteStack:

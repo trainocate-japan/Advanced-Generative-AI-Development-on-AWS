@@ -11,13 +11,13 @@ bedrock-agentcore-starter-toolkit を使って Strands Agents で作った
   Docker が起動中（コンテナビルドに必要）
 
 実行:
-  python3.12 agentcore_runtime_deploy.py
+  python agentcore_runtime_deploy.py
 
 呼び出しテスト:
-  python3.12 agentcore_runtime_deploy.py --invoke "沖縄旅行のプランを作って"
+  python agentcore_runtime_deploy.py --invoke "沖縄旅行のプランを作って"
 
 クリーンアップ:
-  python3.12 agentcore_runtime_deploy.py --cleanup
+  python agentcore_runtime_deploy.py --cleanup
 """
 
 import sys
@@ -325,10 +325,10 @@ def main():
   • ヘルスチェック（/ping エンドポイント）
 
   デプロイ後の呼び出し:
-    python3.12 agentcore_runtime_deploy.py --invoke "東京から沖縄の旅行プラン"
+    python agentcore_runtime_deploy.py --invoke "東京から沖縄の旅行プラン"
 
   クリーンアップ:
-    python3.12 agentcore_runtime_deploy.py --cleanup
+    python agentcore_runtime_deploy.py --cleanup
 """)
 
 

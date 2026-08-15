@@ -1,0 +1,43 @@
+#!/bin/bash
+# =============================================================================
+# pre-push hook: プッシュ前にハンズオン資材を S3 にアップロード
+# =============================================================================
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+UPLOAD_SCRIPT="$REPO_ROOT/infra/upload-assets.sh"
+
+# handson/ フォルダに変更があるか確認
+CHANGED=$(git diff --name-only HEAD@{1}..HEAD 2>/dev/null | grep "^handson/" || \
+          git diff --name-only @{push}..HEAD 2>/dev/null | grep "^handson/" || \
+          echo "")
+
+if [ -z "$CHANGED" ]; then
+    echo "[pre-push] handson/ に変更なし。upload-assets スキップ。"
+    exit 0
+fi
+
+echo "[pre-push] handson/ に変更を検出。S3 にアップロード中..."
+echo ""
+
+if [ -x "$UPLOAD_SCRIPT" ]; then
+    bash "$UPLOAD_SCRIPT"
+    RESULT=$?
+    if [ $RESULT -ne 0 ]; then
+        echo ""
+        echo "[pre-push] ⚠️  upload-assets.sh が失敗しました (exit code: $RESULT)"
+        echo "[pre-push] プッシュを続行しますか？ (y/N)"
+        read -r answer < /dev/tty
+        if [ "$answer" != "y" ] && [ "$answer" != "Y" ]; then
+            echo "[pre-push] プッシュを中止しました。"
+            exit 1
+        fi
+    else
+        echo ""
+        echo "[pre-push] ✅ S3 アップロード完了"
+    fi
+else
+    echo "[pre-push] ⚠️  upload-assets.sh が見つからないか実行権限がありません"
+    echo "[pre-push] パス: $UPLOAD_SCRIPT"
+fi
+
+exit 0

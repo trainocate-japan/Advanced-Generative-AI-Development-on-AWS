@@ -333,10 +333,10 @@ def main():
     if not args.query and not args.demo:
         parser.print_help()
         print("\n  使用例:")
-        print('    python3.12 hybrid_search.py --query "契約の解除条件" --mode all')
-        print('    python3.12 hybrid_search.py --query "第三者提供" --mode keyword')
-        print('    python3.12 hybrid_search.py --query "解雇の保護" --semantic-weight 0.8')
-        print('    python3.12 hybrid_search.py --demo')
+        print('    python hybrid_search.py --query "契約の解除条件" --mode all')
+        print('    python hybrid_search.py --query "第三者提供" --mode keyword')
+        print('    python hybrid_search.py --query "解雇の保護" --semantic-weight 0.8')
+        print('    python hybrid_search.py --demo')
         return
 
     query = args.query

@@ -276,14 +276,14 @@ HANDSON_DIR="$HOME/handson"
 if [ -d "$HANDSON_DIR/M05-agentcore" ]; then
     cd "$HANDSON_DIR/M05-agentcore"
     echo "  🗑  AgentCore Gateway クリーンアップ..."
-    python3.12 agentcore_gateway_demo.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
+    python agentcore_gateway_demo.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
     echo "  🗑  AgentCore Memory クリーンアップ..."
-    python3.12 agentcore_memory_demo.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
+    python agentcore_memory_demo.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
     echo "  🗑  AgentCore Identity クリーンアップ..."
-    python3.12 agentcore_identity_demo.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
+    python agentcore_identity_demo.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
     echo "  🗑  AgentCore Runtime 削除..."
     agentcore destroy 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
-    python3.12 agentcore_runtime_deploy.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
+    python agentcore_runtime_deploy.py --cleanup 2>/dev/null && echo "     ✅ 完了" || echo "     ⏭  スキップ"
     cd - > /dev/null
 else
     echo "  ⏭  スキップ (ディレクトリなし): $HANDSON_DIR/M05-agentcore"
@@ -394,7 +394,7 @@ DETECTORS=$(aws cloudwatch describe-anomaly-detectors \
     --namespace "GenAI/Bedrock" --query "AnomalyDetectors" \
     --output json --region "$REGION" 2>/dev/null)
 if [ -n "$DETECTORS" ] && [ "$DETECTORS" != "[]" ]; then
-    echo "$DETECTORS" | python3.12 -c "
+    echo "$DETECTORS" | python -c "
 import json, sys, subprocess
 detectors = json.load(sys.stdin)
 for d in detectors:
