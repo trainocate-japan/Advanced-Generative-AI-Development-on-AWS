@@ -121,16 +121,39 @@ handson/
 1. 各モジュールフォルダ内の `scenario.md` でシナリオと学習目標を確認
 2. `steps.md` の手順に従ってハンズオンを実施
 3. Python スクリプトがある場合は実行してデモ動作を確認
-4. 各モジュールの「デモ手順」セクションで動作確認のポイントを把握
-5. 終了後は各モジュールのクリーンアップ手順に従ってリソースを削除
+4. 終了後は下記クリーンアップ手順に従ってリソースを削除
 
-## デモ手順について
+## クリーンアップ
 
-各モジュールの `steps.md` には「デモ手順」セクションがあります。ハンズオンの主要な動作確認をまとめたものです：
+全モジュールで作成したリソースを一括で削除するスクリプトを用意しています。
 
-1. **事前準備**: ハンズオン手順を一度実行し、動作確認済みの環境を準備
-2. **デモ実行**: 「デモ手順」セクションに従い、ポイントを絞って動作を確認
-3. **観察**: 各ステップで何が起きているかを確認・理解
+### EC2 ハンズオン環境での実行
+
+```bash
+cd ~/handson
+bash cleanup_all.sh
+```
+
+### 対象リソース一覧
+
+| モジュール | 削除対象 |
+|-----------|---------|
+| M01 | CloudFormation スタック (`m01`)、Bedrock 評価ジョブ (`m01-*`) |
+| M02 | CloudFormation スタック (`data-processing-demo`, `stepfunctions-pipeline-demo`, `glue-data-quality-demo`) |
+| M03 | Knowledge Base、S3 Vectors、S3 バケット、IAM ロール、OpenSearch Serverless コレクション + ポリシー、RAG 評価ジョブ |
+| M04 | Bedrock マネージドプロンプト (`customer-support-persona-v1`, `CustomerSupport-*`) |
+| M05 | AgentCore リソース (Gateway/Memory/Identity/Runtime)、CloudFormation スタック、ロググループ、IAM ロール、S3 バケット |
+| M06 | Bedrock Guardrail (`health-chatbot-guardrail`) |
+| M07 | ローカル実行のみ（AWS リソースなし） |
+| M08 | CloudWatch アラーム・ダッシュボード・Anomaly Detectors、SNS トピック、ロググループ、S3 バケット、IAM ロール (`BedrockLoggingRole`)、モデル呼び出しログ設定 |
+| M09 | CloudFormation スタック (`ai-evaluation-pipeline`) |
+| M10 | CloudFormation スタック (3環境 + VPC Endpoint)、DynamoDB テーブル |
+
+### 注意事項
+
+- スクリプトは冪等です（リソースが存在しなければスキップします）
+- CloudFormation スタックの削除完了まで待機します
+- 実行前に `aws sts get-caller-identity` で正しいアカウントか確認してください
 
 ## コスト管理
 

@@ -74,6 +74,21 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 # SAM スタック
 delete_cfn_stack "m01"
 
+# Bedrock モデル評価ジョブ（コンソールで手動作成）
+echo "  🔍 Bedrock 評価ジョブ検索..."
+EVAL_JOBS=$(aws bedrock list-evaluation-jobs \
+    --query "jobSummaries[?starts_with(jobName, 'm01-')].jobArn" \
+    --output text --region "$REGION" 2>/dev/null)
+for job_arn in $EVAL_JOBS; do
+    if [ -n "$job_arn" ] && [ "$job_arn" != "None" ]; then
+        echo "  🗑  評価ジョブ削除: $job_arn"
+        aws bedrock delete-evaluation-job --job-identifier "$job_arn" --region "$REGION" 2>/dev/null
+    fi
+done
+if [ -z "$EVAL_JOBS" ] || [ "$EVAL_JOBS" = "None" ]; then
+    echo "  ⏭  スキップ (存在しない): m01-* 評価ジョブ"
+fi
+
 # ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -97,15 +112,19 @@ KB_IDS=$(aws bedrock-agent list-knowledge-bases --query \
 
 for KB_ID in $KB_IDS; do
     if [ -n "$KB_ID" ] && [ "$KB_ID" != "None" ]; then
-        # データソース削除
+        # データソース削除（dataDeletionPolicy=RETAIN で強制削除）
         DS_IDS=$(aws bedrock-agent list-data-sources --knowledge-base-id "$KB_ID" \
             --query "dataSourceSummaries[].dataSourceId" --output text --region "$REGION" 2>/dev/null)
         for ds_id in $DS_IDS; do
-            echo "  🗑  データソース削除: $ds_id"
+            echo "  🗑  データソース削除: $ds_id (RETAIN モード)"
+            aws bedrock-agent update-data-source --knowledge-base-id "$KB_ID" \
+                --data-source-id "$ds_id" --name "legal-documents" \
+                --data-source-configuration '{"type":"S3","s3Configuration":{"bucketArn":"arn:aws:s3:::dummy-cleanup"}}' \
+                --data-deletion-policy RETAIN --region "$REGION" 2>/dev/null
             aws bedrock-agent delete-data-source --knowledge-base-id "$KB_ID" \
                 --data-source-id "$ds_id" --region "$REGION" 2>/dev/null
         done
-        sleep 3
+        sleep 5
         echo "  🗑  ナレッジベース削除: $KB_ID"
         aws bedrock-agent delete-knowledge-base --knowledge-base-id "$KB_ID" --region "$REGION" 2>/dev/null
         echo "     ✅ 削除完了（または再試行）"
@@ -197,6 +216,21 @@ else
     echo "  ⏭  スキップ (存在しない): ${AOSS_COLLECTION_NAME}-enc"
 fi
 
+# Bedrock RAG 評価ジョブ（コンソールで手動作成）
+echo "  🔍 Bedrock RAG 評価ジョブ検索..."
+RAG_EVAL_JOBS=$(aws bedrock list-evaluation-jobs \
+    --query "jobSummaries[?starts_with(jobName, 'legal-kb-')].jobArn" \
+    --output text --region "$REGION" 2>/dev/null)
+for job_arn in $RAG_EVAL_JOBS; do
+    if [ -n "$job_arn" ] && [ "$job_arn" != "None" ]; then
+        echo "  🗑  RAG 評価ジョブ削除: $job_arn"
+        aws bedrock delete-evaluation-job --job-identifier "$job_arn" --region "$REGION" 2>/dev/null
+    fi
+done
+if [ -z "$RAG_EVAL_JOBS" ] || [ "$RAG_EVAL_JOBS" = "None" ]; then
+    echo "  ⏭  スキップ (存在しない): legal-kb-* 評価ジョブ"
+fi
+
 # ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -204,27 +238,27 @@ echo "  M04: Prompt Engineering"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # Bedrock マネージドプロンプト（コンソールで手動作成された場合）
-PROMPT_ID=$(aws bedrock list-prompts --query \
+PROMPT_ID=$(aws bedrock-agent list-prompts --query \
     "promptSummaries[?name=='customer-support-persona-v1'].id | [0]" \
     --output text --region "$REGION" 2>/dev/null)
 
 if [ -n "$PROMPT_ID" ] && [ "$PROMPT_ID" != "None" ]; then
     echo "  🗑  Bedrock プロンプト削除: customer-support-persona-v1 ($PROMPT_ID)"
-    aws bedrock delete-prompt --prompt-identifier "$PROMPT_ID" --region "$REGION" 2>/dev/null
+    aws bedrock-agent delete-prompt --prompt-identifier "$PROMPT_ID" --region "$REGION" 2>/dev/null
     echo "     ✅ 削除完了"
 else
     echo "  ⏭  スキップ (存在しない): customer-support-persona-v1"
 fi
 
 # API 経由で作成されたプロンプト（CustomerSupport-* パターン）
-PROMPT_IDS_API=$(aws bedrock list-prompts --query \
+PROMPT_IDS_API=$(aws bedrock-agent list-prompts --query \
     "promptSummaries[?starts_with(name, 'CustomerSupport-')].id" \
     --output text --region "$REGION" 2>/dev/null)
 
 for pid in $PROMPT_IDS_API; do
     if [ -n "$pid" ] && [ "$pid" != "None" ]; then
         echo "  🗑  Bedrock プロンプト削除: CustomerSupport-* ($pid)"
-        aws bedrock delete-prompt --prompt-identifier "$pid" --region "$REGION" 2>/dev/null
+        aws bedrock-agent delete-prompt --prompt-identifier "$pid" --region "$REGION" 2>/dev/null
         echo "     ✅ 削除完了"
     fi
 done
@@ -272,6 +306,43 @@ if [ -n "$AGENTCORE_LOG_GROUPS" ]; then
     echo "     ✅ 削除完了"
 else
     echo "  ⏭  スキップ (存在しない): /aws/bedrock-agentcore/* ロググループ"
+fi
+
+# AgentCore IAM ロール（自動作成）
+echo "  🔍 AgentCore Runtime IAM ロール検索..."
+AGENTCORE_ROLES=$(aws iam list-roles \
+    --query "Roles[?starts_with(RoleName, 'AmazonBedrockAgentCoreSDKRuntime')].RoleName" \
+    --output text 2>/dev/null)
+for role in $AGENTCORE_ROLES; do
+    if [ -n "$role" ] && [ "$role" != "None" ]; then
+        echo "  🗑  IAM ロール削除: $role"
+        POLICIES=$(aws iam list-role-policies --role-name "$role" --query "PolicyNames" --output text 2>/dev/null)
+        for pol in $POLICIES; do
+            aws iam delete-role-policy --role-name "$role" --policy-name "$pol" 2>/dev/null
+        done
+        ATTACHED=$(aws iam list-attached-role-policies --role-name "$role" --query "AttachedPolicies[].PolicyArn" --output text 2>/dev/null)
+        for arn in $ATTACHED; do
+            aws iam detach-role-policy --role-name "$role" --policy-arn "$arn" 2>/dev/null
+        done
+        aws iam delete-role --role-name "$role" 2>/dev/null
+        echo "     ✅ 削除完了"
+    fi
+done
+if [ -z "$AGENTCORE_ROLES" ] || [ "$AGENTCORE_ROLES" = "None" ]; then
+    echo "  ⏭  スキップ (存在しない): AmazonBedrockAgentCoreSDKRuntime* ロール"
+fi
+
+# AgentCore S3 バケット（デプロイアーティファクト）
+echo "  🔍 AgentCore S3 バケット検索..."
+AGENTCORE_BUCKETS=$(aws s3api list-buckets --query \
+    "Buckets[?starts_with(Name, 'bedrock-agentcore-codebuild-sources-${ACCOUNT_ID}')].Name" \
+    --output text 2>/dev/null)
+if [ -n "$AGENTCORE_BUCKETS" ]; then
+    for bucket in $AGENTCORE_BUCKETS; do
+        delete_s3_bucket "$bucket"
+    done
+else
+    echo "  ⏭  スキップ (存在しない): bedrock-agentcore-codebuild-sources-* バケット"
 fi
 
 # ============================================================================
@@ -393,6 +464,17 @@ fi
 echo "  🗑  Bedrock モデル呼び出しログ無効化..."
 aws bedrock delete-model-invocation-logging-configuration --region "$REGION" 2>/dev/null
 echo "     ✅ 完了（または既に無効）"
+
+# IAM ロール: BedrockLoggingRole（setup_monitoring.py で作成）
+if aws iam get-role --role-name BedrockLoggingRole 2>/dev/null | grep -q "RoleName"; then
+    echo "  🗑  IAM ロール削除: BedrockLoggingRole"
+    aws iam delete-role-policy --role-name BedrockLoggingRole \
+        --policy-name BedrockLoggingPolicy 2>/dev/null
+    aws iam delete-role --role-name BedrockLoggingRole 2>/dev/null
+    echo "     ✅ 削除完了"
+else
+    echo "  ⏭  スキップ (存在しない): BedrockLoggingRole"
+fi
 
 # ============================================================================
 echo ""
