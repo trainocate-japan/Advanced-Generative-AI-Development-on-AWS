@@ -90,33 +90,38 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  M03: RAG Knowledge Base"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# ナレッジベース削除
-KB_ID=$(aws bedrock-agent list-knowledge-bases --query \
-    "knowledgeBaseSummaries[?name=='legal-knowledge-base-demo'].knowledgeBaseId | [0]" \
+# ナレッジベース削除（DELETE_UNSUCCESSFUL 含む全ステータス対応）
+KB_IDS=$(aws bedrock-agent list-knowledge-bases --query \
+    "knowledgeBaseSummaries[?name=='legal-knowledge-base-demo'].knowledgeBaseId" \
     --output text --region "$REGION" 2>/dev/null)
 
-if [ -n "$KB_ID" ] && [ "$KB_ID" != "None" ]; then
-    # データソース削除
-    DS_IDS=$(aws bedrock-agent list-data-sources --knowledge-base-id "$KB_ID" \
-        --query "dataSourceSummaries[].dataSourceId" --output text --region "$REGION" 2>/dev/null)
-    for ds_id in $DS_IDS; do
-        echo "  🗑  データソース削除: $ds_id"
-        aws bedrock-agent delete-data-source --knowledge-base-id "$KB_ID" \
-            --data-source-id "$ds_id" --region "$REGION" 2>/dev/null
-    done
-    echo "  🗑  ナレッジベース削除: $KB_ID"
-    aws bedrock-agent delete-knowledge-base --knowledge-base-id "$KB_ID" --region "$REGION" 2>/dev/null
-    echo "     ✅ 削除完了"
-else
+for KB_ID in $KB_IDS; do
+    if [ -n "$KB_ID" ] && [ "$KB_ID" != "None" ]; then
+        # データソース削除
+        DS_IDS=$(aws bedrock-agent list-data-sources --knowledge-base-id "$KB_ID" \
+            --query "dataSourceSummaries[].dataSourceId" --output text --region "$REGION" 2>/dev/null)
+        for ds_id in $DS_IDS; do
+            echo "  🗑  データソース削除: $ds_id"
+            aws bedrock-agent delete-data-source --knowledge-base-id "$KB_ID" \
+                --data-source-id "$ds_id" --region "$REGION" 2>/dev/null
+        done
+        sleep 3
+        echo "  🗑  ナレッジベース削除: $KB_ID"
+        aws bedrock-agent delete-knowledge-base --knowledge-base-id "$KB_ID" --region "$REGION" 2>/dev/null
+        echo "     ✅ 削除完了（または再試行）"
+    fi
+done
+if [ -z "$KB_IDS" ] || [ "$KB_IDS" = "None" ]; then
     echo "  ⏭  スキップ (存在しない): legal-knowledge-base-demo"
 fi
 
-# S3 Vectors
+# S3 Vectors（KB 削除後に実行）
 if aws s3vectors get-vector-bucket --vector-bucket-name legal-vectors-demo --region "$REGION" 2>/dev/null | grep -q "vectorBucketArn"; then
     echo "  🗑  S3 Vectors インデックス削除: legal-docs-index"
     aws s3vectors delete-index --vector-bucket-name legal-vectors-demo \
         --index-name legal-docs-index --region "$REGION" 2>/dev/null
-    sleep 5
+    echo "     インデックス削除待機中..."
+    sleep 10
     echo "  🗑  S3 Vectors バケット削除: legal-vectors-demo"
     aws s3vectors delete-vector-bucket --vector-bucket-name legal-vectors-demo --region "$REGION" 2>/dev/null
     echo "     ✅ 削除完了"
@@ -138,6 +143,60 @@ else
     echo "  ⏭  スキップ (存在しない): AmazonBedrockKBRole-LegalDemo"
 fi
 
+# --------------------------------------------------------------------------
+# M03 補足: OpenSearch Serverless ベクトル検索
+# --------------------------------------------------------------------------
+echo ""
+echo "  --- M03 補足: OpenSearch Serverless ---"
+
+AOSS_COLLECTION_NAME="legal-vector-search-demo"
+
+# コレクション削除
+AOSS_COL_ID=$(aws opensearchserverless list-collections \
+    --query "collectionSummaries[?name=='${AOSS_COLLECTION_NAME}'].id | [0]" \
+    --output text --region "$REGION" 2>/dev/null)
+
+if [ -n "$AOSS_COL_ID" ] && [ "$AOSS_COL_ID" != "None" ]; then
+    echo "  🗑  OpenSearch Serverless コレクション削除: $AOSS_COLLECTION_NAME ($AOSS_COL_ID)"
+    aws opensearchserverless delete-collection --id "$AOSS_COL_ID" --region "$REGION" 2>/dev/null
+    echo "     → 削除開始（完了まで数分かかる場合あり）"
+else
+    echo "  ⏭  スキップ (存在しない): $AOSS_COLLECTION_NAME"
+fi
+
+# データアクセスポリシー削除
+if aws opensearchserverless get-access-policy --name "${AOSS_COLLECTION_NAME}-access" \
+    --type data --region "$REGION" 2>/dev/null | grep -q "accessPolicyDetail"; then
+    echo "  🗑  データアクセスポリシー削除: ${AOSS_COLLECTION_NAME}-access"
+    aws opensearchserverless delete-access-policy --name "${AOSS_COLLECTION_NAME}-access" \
+        --type data --region "$REGION" 2>/dev/null
+    echo "     ✅ 削除完了"
+else
+    echo "  ⏭  スキップ (存在しない): ${AOSS_COLLECTION_NAME}-access"
+fi
+
+# ネットワークポリシー削除
+if aws opensearchserverless get-security-policy --name "${AOSS_COLLECTION_NAME}-net" \
+    --type network --region "$REGION" 2>/dev/null | grep -q "securityPolicyDetail"; then
+    echo "  🗑  ネットワークポリシー削除: ${AOSS_COLLECTION_NAME}-net"
+    aws opensearchserverless delete-security-policy --name "${AOSS_COLLECTION_NAME}-net" \
+        --type network --region "$REGION" 2>/dev/null
+    echo "     ✅ 削除完了"
+else
+    echo "  ⏭  スキップ (存在しない): ${AOSS_COLLECTION_NAME}-net"
+fi
+
+# 暗号化ポリシー削除
+if aws opensearchserverless get-security-policy --name "${AOSS_COLLECTION_NAME}-enc" \
+    --type encryption --region "$REGION" 2>/dev/null | grep -q "securityPolicyDetail"; then
+    echo "  🗑  暗号化ポリシー削除: ${AOSS_COLLECTION_NAME}-enc"
+    aws opensearchserverless delete-security-policy --name "${AOSS_COLLECTION_NAME}-enc" \
+        --type encryption --region "$REGION" 2>/dev/null
+    echo "     ✅ 削除完了"
+else
+    echo "  ⏭  スキップ (存在しない): ${AOSS_COLLECTION_NAME}-enc"
+fi
+
 # ============================================================================
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -156,6 +215,19 @@ if [ -n "$PROMPT_ID" ] && [ "$PROMPT_ID" != "None" ]; then
 else
     echo "  ⏭  スキップ (存在しない): customer-support-persona-v1"
 fi
+
+# API 経由で作成されたプロンプト（CustomerSupport-* パターン）
+PROMPT_IDS_API=$(aws bedrock list-prompts --query \
+    "promptSummaries[?starts_with(name, 'CustomerSupport-')].id" \
+    --output text --region "$REGION" 2>/dev/null)
+
+for pid in $PROMPT_IDS_API; do
+    if [ -n "$pid" ] && [ "$pid" != "None" ]; then
+        echo "  🗑  Bedrock プロンプト削除: CustomerSupport-* ($pid)"
+        aws bedrock delete-prompt --prompt-identifier "$pid" --region "$REGION" 2>/dev/null
+        echo "     ✅ 削除完了"
+    fi
+done
 
 echo "  ℹ️  M04 はローカル実行のためリソース少（自動削除済み）"
 
@@ -185,6 +257,22 @@ fi
 
 # CloudFormation スタック
 delete_cfn_stack "agentcore-travel-tools"
+
+# AgentCore CloudWatch ロググループ
+echo "  🔍 AgentCore ロググループ検索..."
+AGENTCORE_LOG_GROUPS=$(aws logs describe-log-groups \
+    --log-group-name-prefix "/aws/bedrock-agentcore/" \
+    --query "logGroups[].logGroupName" --output text --region "$REGION" 2>/dev/null)
+
+if [ -n "$AGENTCORE_LOG_GROUPS" ]; then
+    for lg in $AGENTCORE_LOG_GROUPS; do
+        echo "  🗑  ロググループ削除: $lg"
+        aws logs delete-log-group --log-group-name "$lg" --region "$REGION" 2>/dev/null
+    done
+    echo "     ✅ 削除完了"
+else
+    echo "  ⏭  スキップ (存在しない): /aws/bedrock-agentcore/* ロググループ"
+fi
 
 # ============================================================================
 echo ""
