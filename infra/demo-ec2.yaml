@@ -181,6 +181,61 @@ Resources:
                 Action:
                   - appconfig:*
                 Resource: '*'
+        - PolicyName: PassRoleForKnowledgeBase
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !GetAtt BedrockKBRole.Arn
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: bedrock.amazonaws.com
+
+  # ==========================================================================
+  # IAM Role for Bedrock Knowledge Base (Re-ranking 対応)
+  # ==========================================================================
+  BedrockKBRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AmazonBedrockKBRole-LegalDemo
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: BedrockKBFoundationModel
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:Rerank
+                Resource: '*'
+        - PolicyName: BedrockKBS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::legal-kb-demo-${AWS::AccountId}"
+                  - !Sub "arn:aws:s3:::legal-kb-demo-${AWS::AccountId}/*"
+        - PolicyName: BedrockKBOpenSearchAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - aoss:APIAccessAll
+                Resource: '*'
 
   DemoInstanceProfile:
     Type: AWS::IAM::InstanceProfile

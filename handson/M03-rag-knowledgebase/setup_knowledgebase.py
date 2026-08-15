@@ -53,8 +53,8 @@ def create_kb_role():
         "Statement": [
             {
                 "Effect": "Allow",
-                "Action": ["bedrock:InvokeModel"],
-                "Resource": [EMBEDDING_MODEL_ARN]
+                "Action": ["bedrock:InvokeModel", "bedrock:Rerank"],
+                "Resource": ["*"]
             },
             {
                 "Effect": "Allow",
