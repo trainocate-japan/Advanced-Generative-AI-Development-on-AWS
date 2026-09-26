@@ -44,12 +44,12 @@ INSTANCE_ID=$(aws cloudformation describe-stacks \
   --query "Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue" \
   --output text)
 
-# 接続
+# 接続（接続後は自動的に ssm-user になります）
 aws ssm start-session --target $INSTANCE_ID
 
-# 接続後
-sudo su - ec2-user
-./run-demo.sh
+# 接続後（資材は ~/handson = /home/ssm-user/handson に展開済み）
+cd ~/handson
+ls
 ```
 
 ### Step 5: Bedrock モデルアクセスを有効化
@@ -64,7 +64,7 @@ AWS コンソール → Bedrock → Model access で以下を有効化:
 ```
 初回:   upload-assets.sh → CFn create-stack → Bedrock有効化
 前日:   aws ec2 start-instances --instance-ids <ID>
-当日:   aws ssm start-session → ./run-demo.sh M01
+当日:   aws ssm start-session → cd ~/handson（ssm-user）
 夜間:   23:00 JST に自動停止（Lambda）
 更新時: upload-assets.sh → EC2再起動（UserData再実行はしない。手動でS3から再取得）
 ```
@@ -77,9 +77,8 @@ AWS コンソール → Bedrock → Model access で以下を有効化:
 # 1. S3 に最新版をアップロード
 ./infra/upload-assets.sh
 
-# 2. EC2 内で再取得
+# 2. EC2 内で再取得（接続後は ssm-user。資材は ~/handson に展開）
 aws ssm start-session --target <INSTANCE_ID>
-sudo su - ec2-user
 aws s3 cp s3://handson-demo-assets-<ACCOUNT_ID>/handson-assets/handson.tar.gz /tmp/
 rm -rf ~/handson
 mkdir ~/handson

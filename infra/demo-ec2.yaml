@@ -277,6 +277,21 @@ Resources:
           echo " $(date '+%Y-%m-%d %H:%M:%S')"
           echo "=========================================="
 
+          # ssm-user を明示的に作成（Session Manager 接続前でも存在を保証）
+          echo "[0/6] ssm-user を確認/作成..."
+          if ! id ssm-user >/dev/null 2>&1; then
+            useradd -m -s /bin/bash ssm-user
+            echo "  ssm-user を作成しました"
+          else
+            echo "  ssm-user は既に存在します"
+          fi
+          # ssm-user に sudo 権限を付与（Session Manager のデフォルト挙動に合わせる）
+          echo 'ssm-user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/ssm-agent-users
+          chmod 440 /etc/sudoers.d/ssm-agent-users
+          SSM_HOME=$(getent passwd ssm-user | cut -d: -f6)
+          if [ -z "$SSM_HOME" ]; then SSM_HOME=/home/ssm-user; fi
+          echo "  ssm-user home: $SSM_HOME"
+
           # システム更新と基本ツール (Amazon Linux 2023 = dnf ベース)
           echo "[1/6] システム更新..."
           dnf update -y
@@ -301,16 +316,16 @@ Resources:
           echo "[4/6] CDK..."
           npm install -g aws-cdk
 
-          # S3 からハンズオン資材をダウンロード
+          # S3 からハンズオン資材をダウンロード（ssm-user のホームに展開）
           echo "[5/6] S3 から資材ダウンロード..."
-          WORK_DIR=/home/ssm-user/handson
-          mkdir -p /home/ssm-user
+          WORK_DIR=$SSM_HOME/handson
+          mkdir -p $SSM_HOME
           mkdir -p $WORK_DIR
           aws s3 cp s3://${AssetsBucket}/${AssetsPrefix}/handson.tar.gz /tmp/handson.tar.gz
           tar -xzf /tmp/handson.tar.gz -C $WORK_DIR --strip-components=1
           rm -f /tmp/handson.tar.gz
-          chown -R ssm-user:ssm-user /home/ssm-user
-          chmod -R 755 /home/ssm-user/handson
+          chown -R ssm-user:ssm-user $SSM_HOME
+          chmod -R 755 $WORK_DIR
 
           # デモ用リソース準備
           echo "[6/6] デモ用リソース準備..."
@@ -331,8 +346,8 @@ Resources:
             aws s3 sync "$WORK_DIR/M03-rag-knowledgebase/sample-docs/" "s3://$KB_BUCKET/documents/" --quiet
           fi
 
-          # リージョン設定
-          sudo -u ssm-user aws configure set region $AWS_REGION
+          # リージョン設定（ssm-user の AWS CLI デフォルトリージョン）
+          sudo -u ssm-user env HOME=$SSM_HOME aws configure set region $AWS_REGION
 
           # Bedrock モデル確認
           echo ""
