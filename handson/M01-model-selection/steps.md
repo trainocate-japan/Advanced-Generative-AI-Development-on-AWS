@@ -5,7 +5,6 @@
 ### ステップ 1.1: プロジェクトの準備
 
 ```bash
-sudo su - ec2-user
 cd ~/handson/M01-model-selection
 ```
 
