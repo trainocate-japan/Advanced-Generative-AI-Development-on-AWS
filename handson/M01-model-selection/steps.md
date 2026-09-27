@@ -165,6 +165,93 @@ curl -s -X POST $API_URL/query \
 
 ---
 
+## パート 3.5: TypeSafe AI (jev) による複雑度分類（オプション・10分）
+
+これまでの分類は「文字数 + キーワード一致」というルールベースでした（`classify_request()`）。
+このパートでは、TypeSafe AI の **jev**（System One モデル）に複雑度そのものを判定させ、
+その結果でルーティングするデモを行います。jev は LLM のようにテキストを生成するのではなく、
+`simple` / `medium` / `complex` の **Choice（選択）** と各選択の確率・確信度（confidence）を構造化データで返します。
+
+> ルーターは既存のキーワード分類を温存したまま、リクエストに `"classifier": "jev"` を付けたときだけ jev を使います。
+> jev 呼び出しが失敗した場合は自動的にキーワード分類にフォールバックするため、デモが止まることはありません。
+
+### ステップ 3.5.1: API キーを SSM Parameter Store（SecureString）に格納
+
+API キーはコードにもテンプレートにも埋め込まず、SSM に暗号化して保管します。
+`<あなたのjev APIキー>` を実際のキーに置き換えて実行してください（キーは画面に表示されません）。
+
+```bash
+read -rs -p "jev API key: " JEV_KEY && echo
+aws ssm put-parameter \
+  --name /genai/jev-api-key \
+  --type SecureString \
+  --value "$JEV_KEY" \
+  --overwrite \
+  --region us-east-1
+unset JEV_KEY
+```
+
+> `read -rs` を使うのは、キーをシェル履歴やターミナルに残さないためです。
+> パラメータ名 `/genai/jev-api-key` は `template.yaml` の Lambda 環境変数 `JEV_API_KEY_PARAM` と一致させています。
+> SecureString は SSM のデフォルト（AWS 管理キー `alias/aws/ssm`）で暗号化され、`ssm:GetParameter` 権限だけで復号できます。
+
+### ステップ 3.5.2: ルーターを再デプロイ（初回のみ）
+
+jev 対応のコードと IAM 権限を反映するため、一度だけ再デプロイします。
+
+```bash
+sam build
+sam deploy --stack-name m01 --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset
+```
+
+### ステップ 3.5.3: jev 分類でルーティング
+
+`"classifier": "jev"` を付けてクエリを送ります。レスポンスに jev の判定結果（confidence・確率分布）が含まれます。
+
+```bash
+# simple 想定のクエリ
+curl -s -X POST $API_URL/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "S3とは何ですか？", "classifier": "jev"}' | python -m json.tool
+
+# complex 想定のクエリ
+curl -s -X POST $API_URL/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "マルチリージョンDR設計をRTO5分・RPO1分で提案してください", "classifier": "jev"}' | python -m json.tool
+```
+
+レスポンスで以下を確認します：
+- `"classifier": "jev"` — jev で分類されたことを示す
+- `"complexity"` — jev が選んだ複雑度（`simple`/`medium`/`complex`）
+- `"jev_confidence"` — 判定の確信度（0〜1）
+- `"jev_probabilities"` — 各複雑度の確率分布
+- `"model_used"` — 分類結果に応じてルーティングされたモデル
+
+### ステップ 3.5.4: キーワード分類との比較
+
+同じクエリを `classifier` なし（従来のキーワード分類）でも送り、判定の違いを比較します。
+
+```bash
+# キーワード分類（従来動作。classifier を指定しない）
+curl -s -X POST $API_URL/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "既存システムのボトルネックを踏まえて最適なキャッシュ戦略を教えて"}' | python -m json.tool
+
+# 同じクエリを jev 分類で
+curl -s -X POST $API_URL/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "既存システムのボトルネックを踏まえて最適なキャッシュ戦略を教えて", "classifier": "jev"}' | python -m json.tool
+```
+
+**議論ポイント**:
+- キーワードに依存しない jev の分類は、言い回しが変わっても安定するか？
+- confidence が低いケース（0.5 付近）はどんなクエリか？そのとき自動ルーティングすべきか、人間にエスカレーションすべきか？
+- ルールベース（高速・無料・脆い）と jev（構造化・確信度付き・API コスト）のトレードオフ
+
+> **補足**: `/genai/jev-api-key` をカスタム KMS キーで暗号化した場合は、Lambda ロールに `kms:Decrypt` 権限の追加が必要です（AWS 管理キーなら不要）。
+
+---
+
 ## パート 4: CloudWatch ダッシュボードでの可視化（5分）
 
 ### ステップ 4.1: ダッシュボード URL の取得

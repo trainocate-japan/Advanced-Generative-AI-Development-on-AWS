@@ -112,6 +112,8 @@ Resources:
           APPCONFIG_ENV: !Ref ModelSelectionAppConfigEnv
           APPCONFIG_PROFILE: !Ref ModelSelectionConfigProfile
           FAILURE_SIM_PREFIX: /genai/model-selection/simulate-failure/
+          # TypeSafe AI (jev) 分類用: APIキー本体ではなく SSM パラメータ名のみを渡す
+          JEV_API_KEY_PARAM: /genai/jev-api-key
       Policies:
         - Statement:
             - Effect: Allow
@@ -133,6 +135,12 @@ Resources:
                 - ssm:PutParameter
               Resource:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/model-selection/simulate-failure/*"
+            # TypeSafe AI (jev) APIキー（SSM SecureString）の読み取り
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/genai/jev-api-key"
             - Effect: Allow
               Action:
                 - appconfig:GetLatestConfiguration

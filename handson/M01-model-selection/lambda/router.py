@@ -11,6 +11,8 @@ import json
 import os
 import time
 import logging
+import urllib.request
+import urllib.error
 from datetime import datetime
 
 logger = logging.getLogger()
@@ -30,6 +32,15 @@ APPCONFIG_PROFILE = os.environ.get('APPCONFIG_PROFILE', '')
 
 # 障害シミュレーション用 SSM パラメータのプレフィックス
 FAILURE_SIM_PREFIX = os.environ.get('FAILURE_SIM_PREFIX', '/genai/model-selection/simulate-failure/')
+
+# TypeSafe AI (jev) 分類用の設定
+# APIキーは SSM Parameter Store (SecureString) から取得する（コードには埋め込まない）
+JEV_API_KEY_PARAM = os.environ.get('JEV_API_KEY_PARAM', '/genai/jev-api-key')
+JEV_API_URL = os.environ.get('JEV_API_URL', 'https://api.typesafe.ai/v1/systemone')
+JEV_MODEL = os.environ.get('JEV_MODEL', 'jev-latest')
+
+# jev APIキーのキャッシュ（Lambda コンテナ再利用時に SSM 呼び出しを抑える）
+_jev_api_key = None
 
 # サーキットブレーカー状態（Lambda のインメモリ - 本番では DynamoDB 推奨）
 circuit_breakers = {}
@@ -325,6 +336,93 @@ def classify_request(query, complexity=None):
         return "simple"
     else:
         return "medium"
+
+
+# ========================================
+# TypeSafe AI (jev) によるリクエスト分類
+# ========================================
+
+def _get_jev_api_key():
+    """SSM Parameter Store (SecureString) から jev API キーを取得する（キャッシュ付き）"""
+    global _jev_api_key
+    if _jev_api_key:
+        return _jev_api_key
+    response = ssm.get_parameter(Name=JEV_API_KEY_PARAM, WithDecryption=True)
+    _jev_api_key = response['Parameter']['Value']
+    return _jev_api_key
+
+
+def classify_request_with_jev(query):
+    """
+    TypeSafe AI の jev モデル（System One）で複雑度を分類する。
+
+    Choice 質問として simple / medium / complex を選ばせ、
+    選択結果と確率分布・確信度を返す。
+
+    Returns:
+        dict: {
+            "complexity": "simple"|"medium"|"complex",
+            "confidence": float,
+            "probabilities": {...},
+            "classifier": "jev",
+            "jev_model": "<応答モデル名>"
+        }
+
+    Raises:
+        Exception: API 呼び出しやパースに失敗した場合（呼び出し側でフォールバックする）
+    """
+    api_key = _get_jev_api_key()
+
+    payload = {
+        "state": query,
+        "model": JEV_MODEL,
+        "questions": {
+            "complexity": {
+                "type": "choice",
+                "instructions": (
+                    "このユーザーのクエリに回答するのに必要な推論の複雑さを分類してください。"
+                    "事実の確認や短い説明で済むものは simple、"
+                    "ある程度の説明や複数の観点が必要なものは medium、"
+                    "設計・分析・比較・戦略立案など深い推論が必要なものは complex です。"
+                ),
+                "criteria": {
+                    "simple": "定義や事実の確認、短い説明で回答できる単純な質問",
+                    "medium": "複数の観点や中程度の説明を要する質問",
+                    "complex": "設計・分析・比較・リスク評価・戦略立案など深い推論を要する質問"
+                }
+            }
+        }
+    }
+
+    data = json.dumps(payload, ensure_ascii=False).encode('utf-8')
+    req = urllib.request.Request(
+        JEV_API_URL,
+        data=data,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        body = json.loads(resp.read().decode('utf-8'))
+
+    answer = body['answers']['complexity']
+    complexity = answer['choice']
+
+    # 想定外の値が返った場合は medium に丸める
+    if complexity not in ('simple', 'medium', 'complex'):
+        logger.warning(f"jev returned unexpected choice '{complexity}', defaulting to medium")
+        complexity = 'medium'
+
+    return {
+        "complexity": complexity,
+        "confidence": answer.get('confidence'),
+        "probabilities": answer.get('probabilities'),
+        "classifier": "jev",
+        "jev_model": body.get('model')
+    }
 
 
 def select_model(complexity, budget_exceeded=False):
@@ -716,6 +814,8 @@ def lambda_handler(event, context):
         body = json.loads(event.get('body', '{}'))
         query = body.get('query', '')
         requested_complexity = body.get('complexity')
+        # classifier: "keyword"（デフォルト・従来動作） または "jev"（TypeSafe AI で分類）
+        classifier = body.get('classifier', 'keyword')
 
         if not query:
             return {
@@ -725,7 +825,29 @@ def lambda_handler(event, context):
             }
 
         # リクエスト分類
-        complexity = classify_request(query, requested_complexity)
+        # classifier=jev かつ complexity が明示指定されていない場合は jev で分類
+        classification_meta = {"classifier": "keyword"}
+        if classifier == 'jev' and not requested_complexity:
+            try:
+                jev_result = classify_request_with_jev(query)
+                complexity = jev_result['complexity']
+                classification_meta = {
+                    "classifier": "jev",
+                    "jev_confidence": jev_result.get('confidence'),
+                    "jev_probabilities": jev_result.get('probabilities'),
+                    "jev_model": jev_result.get('jev_model')
+                }
+                logger.info(
+                    f"jev classified query as '{complexity}' "
+                    f"(confidence={jev_result.get('confidence')})"
+                )
+            except Exception as e:
+                # jev 失敗時は従来のキーワード分類にフォールバック（デモを止めない）
+                logger.warning(f"jev classification failed ({str(e)}), falling back to keyword classifier")
+                complexity = classify_request(query, requested_complexity)
+                classification_meta = {"classifier": "keyword_fallback", "jev_error": str(e)}
+        else:
+            complexity = classify_request(query, requested_complexity)
 
         # モデル選択（AppConfig ベース）
         model_id, selection_reason = select_model(complexity)
@@ -742,6 +864,7 @@ def lambda_handler(event, context):
                 'query': query,
                 'complexity': complexity,
                 'selection_reason': selection_reason,
+                **classification_meta,
                 **result
             }, ensure_ascii=False)
         }
