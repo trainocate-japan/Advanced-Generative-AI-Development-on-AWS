@@ -203,8 +203,9 @@ echo "$S3_BUCKET"
 echo "入力: s3://$S3_BUCKET/evaluation/evaluation-dataset.jsonl"
 echo "出力: s3://$S3_BUCKET/evaluation/results/"
 
-# データセットの中身を確認
-aws s3 cp "s3://$S3_BUCKET/evaluation/evaluation-dataset.jsonl" - | head -3
+# データセットの中身を確認（一旦ローカルに保存してから先頭3行を表示）
+aws s3 cp "s3://$S3_BUCKET/evaluation/evaluation-dataset.jsonl" /tmp/evaluation-dataset.jsonl
+head -3 /tmp/evaluation-dataset.jsonl
 ```
 
 データセットは JSONL 形式で、各行に `prompt` と `referenceResponse`（期待される回答）が含まれています。
