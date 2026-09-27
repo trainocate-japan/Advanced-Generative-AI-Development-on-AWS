@@ -7,11 +7,18 @@
 ```bash
 cd ~/handson/M03-rag-knowledgebase
 
-# サンプル法律文書用の S3 バケットを作成
-aws s3 mb s3://legal-kb-demo-$(aws sts get-caller-identity --query Account --output text)
+# サンプル法律文書用の S3 バケット名を前方一致で取得（アカウントIDを直接扱わない）
+KB_BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^legal-kb-demo-')
+
+# バケットがまだ存在しない場合は作成
+if [ -z "$KB_BUCKET" ]; then
+  KB_BUCKET="legal-kb-demo-$(aws sts get-caller-identity --query Account --output text)"
+  aws s3 mb "s3://$KB_BUCKET"
+fi
+echo "$KB_BUCKET"
 
 # サンプルドキュメントをアップロード
-aws s3 cp sample-docs/ s3://legal-kb-demo-$(aws sts get-caller-identity --query Account --output text)/documents/ --recursive
+aws s3 cp sample-docs/ "s3://$KB_BUCKET/documents/" --recursive
 ```
 
 サンプルドキュメント（`sample-docs/`）には以下が含まれます：
@@ -295,8 +302,10 @@ python rag_evaluation.py
 評価用データセット（`rag-eval-dataset.jsonl`）を S3 にアップロードします：
 
 ```bash
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-aws s3 cp rag-eval-dataset.jsonl s3://legal-kb-demo-${ACCOUNT_ID}/evaluation/rag-eval-dataset.jsonl
+# バケット名を前方一致で取得（アカウントIDを直接扱わない）
+KB_BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^legal-kb-demo-')
+echo "$KB_BUCKET"
+aws s3 cp rag-eval-dataset.jsonl "s3://$KB_BUCKET/evaluation/rag-eval-dataset.jsonl"
 ```
 
 データセットのフォーマット（JSONL、各行が1つの評価ケース）：
@@ -328,9 +337,9 @@ aws s3 cp rag-eval-dataset.jsonl s3://legal-kb-demo-${ACCOUNT_ID}/evaluation/rag
    - `Helpfulness` — 有用性（質問者にとって実用的か）
    - `Citation Coverage` — 引用カバー率（回答の根拠が引用で裏付けられているか）
    - `Citation Precision` — 引用精度（引用が回答内容に関連しているか）
-6. **Datasets**:
-   - Prompt dataset: `s3://legal-kb-demo-<ACCOUNT_ID>/evaluation/rag-eval-dataset.jsonl`
-   - Output location: `s3://legal-kb-demo-<ACCOUNT_ID>/evaluation/results/`
+6. **Datasets**（`<KB_BUCKET>` は前段で `echo "$KB_BUCKET"` した実際のバケット名に読み替え）:
+   - Prompt dataset: `s3://<KB_BUCKET>/evaluation/rag-eval-dataset.jsonl`
+   - Output location: `s3://<KB_BUCKET>/evaluation/results/`
 7. **Service role**: 新規作成 or 既存のロールを選択
 8. 「Create」をクリックして評価ジョブを開始
 

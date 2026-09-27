@@ -190,11 +190,21 @@ Amazon Bedrock のモデル評価機能を使用して、定量的（Programmati
 
 ### 評価データセットの確認
 
+まず、資材バケット名を前方一致で取得して環境変数に格納します（アカウントIDを直接扱わずに済みます）：
+
+```bash
+S3_BUCKET=$(aws s3 ls | awk '{print $3}' | grep '^handson-demo-assets-')
+echo "$S3_BUCKET"
+```
+
 評価用データセットは以下に配置済みです：
 
-```
-入力: s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl
-出力: s3://handson-demo-assets-079700436326/evaluation/results/
+```bash
+echo "入力: s3://$S3_BUCKET/evaluation/evaluation-dataset.jsonl"
+echo "出力: s3://$S3_BUCKET/evaluation/results/"
+
+# データセットの中身を確認
+aws s3 cp "s3://$S3_BUCKET/evaluation/evaluation-dataset.jsonl" - | head -3
 ```
 
 データセットは JSONL 形式で、各行に `prompt` と `referenceResponse`（期待される回答）が含まれています。
@@ -236,12 +246,13 @@ Amazon Bedrock のモデル評価機能を使用して、定量的（Programmati
    - Metric ドロップダウンから **Accuracy** を選択
      - 実世界の事実知識をエンコードする能力を測定
    - Choose a prompt dataset: **Use your own prompt dataset** を選択
-   - **Input S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl`
+   - **Input S3 URI**: `s3://<S3_BUCKET>/evaluation/evaluation-dataset.jsonl`
+     - `<S3_BUCKET>` は前段で `echo "$S3_BUCKET"` した実際のバケット名に読み替えてください
 
    ※ メトリクスを追加するには画面下部の「Add metric」をクリックします。不要なメトリクスは「Remove」ボタンで削除できます。
 
 7. **Output S3 URI の指定**:
-   - `s3://handson-demo-assets-079700436326/evaluation/results/`
+   - `s3://<S3_BUCKET>/evaluation/results/`
 
 8. **Create** をクリックして評価を開始
 
@@ -296,9 +307,9 @@ LLM as a Judge では、別のLLM（審査員モデル）が応答品質を評�
    - **Helpfulness**（有用性）✅
    - **Harmfulness**（無害性）✅
 
-7. **データセットの指定**:
-   - **Input S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/evaluation-dataset.jsonl`
-   - **Output S3 URI**: `s3://handson-demo-assets-079700436326/evaluation/results/`
+7. **データセットの指定**（`<S3_BUCKET>` は `echo "$S3_BUCKET"` した実際のバケット名に読み替え）:
+   - **Input S3 URI**: `s3://<S3_BUCKET>/evaluation/evaluation-dataset.jsonl`
+   - **Output S3 URI**: `s3://<S3_BUCKET>/evaluation/results/`
 
 8. **Create** をクリックして評価を開始
 
